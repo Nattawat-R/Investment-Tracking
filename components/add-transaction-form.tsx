@@ -83,6 +83,10 @@ export default function AddTransactionForm() {
             <span className="text-xs text-gray-500">
               Supports US stocks, Thai stocks (SET), cryptocurrencies, and Thai Gold
             </span>
+            <br />
+            <span className="text-xs text-yellow-400">
+              💡 Prices should be entered in the asset's native currency (USD for US stocks/crypto, THB for Thai assets)
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -102,7 +106,7 @@ export default function AddTransactionForm() {
                   setSearchQuery(e.target.value)
                   handleStockSearch(e.target.value)
                 }}
-                className="pl-10 bg-gray-800 border-gray-700 text-white"
+                className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-gray-600 transition-colors"
               />
             </div>
 
@@ -125,7 +129,7 @@ export default function AddTransactionForm() {
                         setSearchQuery(`${stock.symbol} - ${stock.name}`)
                         setSearchResults([])
                       }}
-                      className="w-full text-left p-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
+                      className="w-full text-left p-3 hover:bg-gray-700 hover:border-gray-600 border-b border-gray-700 last:border-b-0 transition-all duration-200"
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -154,7 +158,8 @@ export default function AddTransactionForm() {
                   <div className="font-semibold text-white">{selectedStock.symbol}</div>
                   <div className="text-sm text-gray-400">{selectedStock.name}</div>
                   <div className="text-xs text-gray-500">
-                    {selectedStock.exchange} • {selectedStock.currency}
+                    {selectedStock.exchange} •{" "}
+                    <span className="font-medium text-blue-400">{selectedStock.currency}</span>
                   </div>
                 </div>
                 <Badge variant="outline" className={getAssetTypeBadge(selectedStock.assetType).className}>
@@ -177,17 +182,20 @@ export default function AddTransactionForm() {
                 Transaction Type
               </Label>
               <Select name="transactionType" required>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-gray-800 border-gray-700 text-white hover:border-gray-600 focus:border-blue-500 transition-colors">
                   <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="BUY" className="text-white hover:bg-gray-700">
+                  <SelectItem value="BUY" className="text-white hover:bg-gray-700 focus:bg-gray-700 transition-colors">
                     Buy
                   </SelectItem>
-                  <SelectItem value="SELL" className="text-white hover:bg-gray-700">
+                  <SelectItem value="SELL" className="text-white hover:bg-gray-700 focus:bg-gray-700 transition-colors">
                     Sell
                   </SelectItem>
-                  <SelectItem value="DIVIDEND" className="text-white hover:bg-gray-700">
+                  <SelectItem
+                    value="DIVIDEND"
+                    className="text-white hover:bg-gray-700 focus:bg-gray-700 transition-colors"
+                  >
                     Dividend
                   </SelectItem>
                 </SelectContent>
@@ -238,7 +246,7 @@ export default function AddTransactionForm() {
                   : selectedStock?.assetType === "THAI_GOLD"
                     ? "Gram"
                     : "Share"}{" "}
-                ({selectedStock?.currency || "USD"})
+                <span className="font-semibold text-blue-400">({selectedStock?.currency || "USD"})</span>
               </Label>
               <Input
                 id="pricePerShare"
@@ -247,7 +255,7 @@ export default function AddTransactionForm() {
                 step="0.01"
                 min="0"
                 required
-                placeholder="0.00"
+                placeholder={`0.00 ${selectedStock?.currency || "USD"}`}
                 className="bg-gray-800 border-gray-700 text-white"
               />
             </div>
@@ -261,7 +269,7 @@ export default function AddTransactionForm() {
               id="notes"
               name="notes"
               placeholder="Add any notes about this transaction..."
-              className="bg-gray-800 border-gray-700 text-white"
+              className="bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-gray-600 transition-colors"
             />
           </div>
 

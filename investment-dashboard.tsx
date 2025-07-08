@@ -10,7 +10,6 @@ import {
   Wallet,
   Search,
   Filter,
-  MoreHorizontal,
   RefreshCw,
   Globe,
   Trash2,
@@ -21,7 +20,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   AlertDialog,
@@ -196,6 +194,18 @@ export default function Component() {
       (holding.company_name && holding.company_name.toLowerCase().includes(searchTerm.toLowerCase())),
   )
 
+  // Sort holdings by current value (highest to lowest)
+  const sortedHoldings = [...filteredHoldings].sort((a, b) => {
+    const aValue = convertCurrency(a.currentValue, a.currency, displayCurrency)
+    const bValue = convertCurrency(b.currentValue, b.currency, displayCurrency)
+    return bValue - aValue
+  })
+
+  // Sort transactions by date (newest to oldest)
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    return new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime()
+  })
+
   // Generate 1-year portfolio history data based on actual transactions
   const portfolioData = generatePortfolioHistory(
     portfolioSummary.totalValue,
@@ -205,6 +215,11 @@ export default function Component() {
 
   // Calculate individual asset allocation for pie chart
   const assetAllocation = calculateAssetAllocation(holdings, displayCurrency)
+
+  // Helper function to format symbol to maximum 4 characters
+  const formatSymbol = (symbol: string): string => {
+    return symbol.length > 4 ? symbol.substring(0, 4) : symbol
+  }
 
   return (
     <div className="min-h-screen bg-gray-950 p-2 sm:p-4 md:p-6">
@@ -219,17 +234,23 @@ export default function Component() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-            {/* Currency Selector */}
+            {/* Currency Selector - IMPROVED CONTRAST */}
             <Select value={displayCurrency} onValueChange={(value: "USD" | "THB") => setDisplayCurrency(value)}>
-              <SelectTrigger className="w-24 bg-gray-900 border-gray-700 text-white">
+              <SelectTrigger className="w-24 bg-gray-900 border-gray-700 text-white hover:bg-gray-800 hover:border-gray-600 focus:border-blue-500 transition-all duration-200">
                 <Globe className="w-4 h-4 mr-1" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-gray-900 border-gray-700">
-                <SelectItem value="USD" className="text-white hover:bg-gray-800">
+                <SelectItem
+                  value="USD"
+                  className="text-white hover:bg-gray-700 focus:bg-gray-700 hover:text-white focus:text-white transition-colors cursor-pointer"
+                >
                   USD
                 </SelectItem>
-                <SelectItem value="THB" className="text-white hover:bg-gray-800">
+                <SelectItem
+                  value="THB"
+                  className="text-white hover:bg-gray-700 focus:bg-gray-700 hover:text-white focus:text-white transition-colors cursor-pointer"
+                >
                   THB
                 </SelectItem>
               </SelectContent>
@@ -238,7 +259,7 @@ export default function Component() {
               onClick={loadData}
               disabled={isLoading}
               variant="outline"
-              className="border-gray-700 text-gray-300 hover:bg-gray-800 bg-transparent"
+              className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white hover:border-gray-600 bg-transparent transition-all duration-200"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Refresh
@@ -321,37 +342,37 @@ export default function Component() {
           </Card>
         </div>
 
-        {/* Main Content Tabs */}
+        {/* Main Content Tabs - IMPROVED SIZE AND ALIGNMENT */}
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 bg-gray-900 border border-gray-800">
+          <TabsList className="grid w-full grid-cols-4 bg-gray-900 border border-gray-800 h-12">
             <TabsTrigger
               value="overview"
-              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-400 hover:text-gray-200 text-sm py-2.5"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-gray-300 hover:text-gray-100 hover:bg-gray-800 text-sm py-3 px-4 h-full flex items-center justify-center transition-all duration-200"
             >
               Overview
             </TabsTrigger>
             <TabsTrigger
               value="holdings"
-              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-400 hover:text-gray-200 text-sm py-2.5"
+              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-300 hover:text-gray-100 hover:bg-gray-800 text-sm py-3 px-4 h-full flex items-center justify-center transition-all duration-200"
             >
               Holdings
             </TabsTrigger>
             <TabsTrigger
               value="transactions"
-              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-400 hover:text-gray-200 text-sm py-2.5"
+              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-300 hover:text-gray-100 hover:bg-gray-800 text-sm py-3 px-4 h-full flex items-center justify-center transition-all duration-200"
             >
               Transactions
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
-              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-400 hover:text-gray-200 text-sm py-2.5"
+              className="data-[state=active]:bg-[#0A84FF] data-[state=active]:text-white text-gray-300 hover:text-gray-100 hover:bg-gray-800 text-sm py-3 px-4 h-full flex items-center justify-center transition-all duration-200"
             >
               Analytics
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Portfolio Allocation - Full Width */}
+            {/* Portfolio Allocation - BIGGER PIE CHART & MOBILE OPTIMIZED */}
             <Card className="border border-gray-800 bg-gray-900 shadow-xl">
               <CardHeader className="px-6 py-4">
                 <CardTitle className="text-lg font-semibold text-white">Portfolio Allocation</CardTitle>
@@ -359,9 +380,9 @@ export default function Component() {
               </CardHeader>
               <CardContent className="px-6 pb-6">
                 {assetAllocation.length > 0 ? (
-                  <div className="flex gap-6 h-[400px]">
-                    {/* Pie Chart - Left Side */}
-                    <div className="w-[350px] flex-shrink-0 flex items-center justify-center">
+                  <div className="flex flex-col lg:flex-row gap-6">
+                    {/* Pie Chart - BIGGER SIZE */}
+                    <div className="w-full lg:w-[450px] flex-shrink-0 flex items-center justify-center h-[350px] lg:h-[450px]">
                       <div className="w-full h-full">
                         <ResponsiveContainer width="100%" height="100%">
                           <RechartsPieChart>
@@ -369,8 +390,8 @@ export default function Component() {
                               data={assetAllocation}
                               cx="50%"
                               cy="50%"
-                              innerRadius={70}
-                              outerRadius={150}
+                              innerRadius={80}
+                              outerRadius={160}
                               paddingAngle={2}
                               dataKey="percentage"
                             >
@@ -407,24 +428,37 @@ export default function Component() {
                       </div>
                     </div>
 
-                    {/* Asset Details Table - Right Side */}
+                    {/* Asset Details Table - MOBILE OPTIMIZED */}
                     <div className="flex-1 flex flex-col min-w-0">
-                      {/* Table Header */}
-                      <div className="grid grid-cols-12 gap-2 py-3 px-4 border-b border-gray-700 bg-gray-800/50 rounded-t-lg">
+                      {/* Desktop Table Header */}
+                      <div className="hidden lg:grid grid-cols-12 gap-2 py-3 px-4 border-b border-gray-700 bg-gray-800/50 rounded-t-lg">
                         <div className="col-span-1 flex justify-center">
-                          <span className="text-gray-400 font-medium text-xs uppercase tracking-wide">•</span>
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">•</span>
                         </div>
                         <div className="col-span-4">
-                          <span className="text-gray-400 font-medium text-xs uppercase tracking-wide">Asset Name</span>
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Asset Name</span>
                         </div>
                         <div className="col-span-2 text-center">
-                          <span className="text-gray-400 font-medium text-xs uppercase tracking-wide">Allocation</span>
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Allocation</span>
                         </div>
                         <div className="col-span-3 text-right">
-                          <span className="text-gray-400 font-medium text-xs uppercase tracking-wide">Value</span>
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Value</span>
                         </div>
                         <div className="col-span-2 text-right">
-                          <span className="text-gray-400 font-medium text-xs uppercase tracking-wide">Gain/Loss</span>
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Gain/Loss</span>
+                        </div>
+                      </div>
+
+                      {/* Mobile Table Header */}
+                      <div className="lg:hidden grid grid-cols-8 gap-2 py-3 px-4 border-b border-gray-700 bg-gray-800/50 rounded-t-lg">
+                        <div className="col-span-1 flex justify-center">
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">•</span>
+                        </div>
+                        <div className="col-span-5">
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Asset Name</span>
+                        </div>
+                        <div className="col-span-2 text-center">
+                          <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Allocation</span>
                         </div>
                       </div>
 
@@ -433,49 +467,78 @@ export default function Component() {
                         {assetAllocation.slice(0, 10).map((asset, index) => {
                           const badgeProps = getAssetTypeBadge(asset.assetType)
                           return (
-                            <div
-                              key={index}
-                              className="grid grid-cols-12 gap-2 py-3 px-4 hover:bg-gray-800/30 transition-colors border-b border-gray-800/50 last:border-b-0"
-                            >
-                              {/* Color Dot */}
-                              <div className="col-span-1 flex justify-center items-center">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: asset.color }} />
-                              </div>
-
-                              {/* Asset Name */}
-                              <div className="col-span-4 flex flex-col justify-center min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-white font-medium text-sm truncate">{asset.symbol}</span>
-                                  <Badge
-                                    variant="outline"
-                                    className={`${badgeProps.className} text-xs py-0 px-1 flex-shrink-0`}
-                                  >
-                                    {badgeProps.label}
-                                  </Badge>
+                            <div key={index}>
+                              {/* Desktop Row */}
+                              <div className="hidden lg:grid grid-cols-12 gap-2 py-3 px-4 hover:bg-gray-800/50 transition-colors border-b border-gray-800/50 last:border-b-0">
+                                {/* Color Dot */}
+                                <div className="col-span-1 flex justify-center items-center">
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: asset.color }} />
                                 </div>
-                                <p className="text-xs text-gray-500 truncate">{asset.name}</p>
+
+                                {/* Asset Name */}
+                                <div className="col-span-4 flex flex-col justify-center min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-white font-medium text-sm truncate">{asset.symbol}</span>
+                                    <Badge
+                                      variant="outline"
+                                      className={`${badgeProps.className} text-xs py-0 px-1 flex-shrink-0 border-opacity-50 hover:border-opacity-75 transition-colors`}
+                                    >
+                                      {badgeProps.label}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-gray-400 truncate hover:text-gray-300 transition-colors">
+                                    {asset.name}
+                                  </p>
+                                </div>
+
+                                {/* Allocation */}
+                                <div className="col-span-2 flex items-center justify-center">
+                                  <span className="text-white font-bold text-sm">{asset.percentage.toFixed(1)}%</span>
+                                </div>
+
+                                {/* Value */}
+                                <div className="col-span-3 flex items-center justify-end">
+                                  <span className="text-white text-sm font-medium">
+                                    {formatCurrency(asset.value, displayCurrency)}
+                                  </span>
+                                </div>
+
+                                {/* Gain/Loss */}
+                                <div className="col-span-2 flex items-center justify-end">
+                                  <span
+                                    className={`text-sm font-medium ${asset.gainLoss >= 0 ? "text-green-400 hover:text-green-300" : "text-red-400 hover:text-red-300"} transition-colors`}
+                                  >
+                                    {asset.gainLoss >= 0 ? "+" : ""}
+                                    {formatCurrency(asset.gainLoss, displayCurrency)}
+                                  </span>
+                                </div>
                               </div>
 
-                              {/* Allocation */}
-                              <div className="col-span-2 flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">{asset.percentage.toFixed(1)}%</span>
-                              </div>
+                              {/* Mobile Row - SIMPLIFIED */}
+                              <div className="lg:hidden grid grid-cols-8 gap-2 py-3 px-4 hover:bg-gray-800/50 transition-colors border-b border-gray-800/50 last:border-b-0">
+                                {/* Color Dot */}
+                                <div className="col-span-1 flex justify-center items-center">
+                                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: asset.color }} />
+                                </div>
 
-                              {/* Value */}
-                              <div className="col-span-3 flex items-center justify-end">
-                                <span className="text-white text-sm">
-                                  {formatCurrency(asset.value, displayCurrency)}
-                                </span>
-                              </div>
+                                {/* Asset Name */}
+                                <div className="col-span-5 flex flex-col justify-center min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-white font-medium text-sm truncate">{asset.symbol}</span>
+                                    <Badge
+                                      variant="outline"
+                                      className={`${badgeProps.className} text-xs py-0 px-1 flex-shrink-0 border-opacity-50`}
+                                    >
+                                      {badgeProps.label.split(" ")[0]}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-xs text-gray-400 truncate">{asset.name}</p>
+                                </div>
 
-                              {/* Gain/Loss */}
-                              <div className="col-span-2 flex items-center justify-end">
-                                <span
-                                  className={`text-sm ${asset.gainLoss >= 0 ? "text-[#30D158]" : "text-[#FF453A]"}`}
-                                >
-                                  {asset.gainLoss >= 0 ? "+" : ""}
-                                  {formatCurrency(asset.gainLoss, displayCurrency)}
-                                </span>
+                                {/* Allocation */}
+                                <div className="col-span-2 flex items-center justify-center">
+                                  <span className="text-white font-bold text-sm">{asset.percentage.toFixed(1)}%</span>
+                                </div>
                               </div>
                             </div>
                           )
@@ -493,7 +556,7 @@ export default function Component() {
               </CardContent>
             </Card>
 
-            {/* Portfolio Performance Chart - Moved Below */}
+            {/* Portfolio Performance Chart */}
             <Card className="border border-gray-800 bg-gray-900 shadow-xl">
               <CardHeader className="px-6 py-4">
                 <CardTitle className="text-lg font-semibold text-white">Portfolio Performance (1 Year)</CardTitle>
@@ -563,172 +626,175 @@ export default function Component() {
                   placeholder="Search holdings..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 border border-gray-800 bg-gray-900 text-white placeholder-gray-500 focus:border-[#0A84FF]"
+                  className="pl-10 border border-gray-800 bg-gray-900 text-white placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-gray-700 transition-colors"
                 />
               </div>
               <Button
                 variant="outline"
-                className="border-gray-800 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white"
+                className="border-gray-800 bg-gray-900 text-gray-300 hover:bg-gray-800 hover:text-white hover:border-gray-600 transition-all duration-200"
               >
                 <Filter className="w-4 h-4 mr-2" />
                 Filter
               </Button>
             </div>
 
-            {/* Holdings List */}
-            <div className="space-y-4">
-              {filteredHoldings.length === 0 ? (
-                <Card className="border border-gray-800 bg-gray-900 shadow-xl">
-                  <CardContent className="p-8 text-center">
+            {/* Holdings Table - IMPROVED EQUAL SPACING */}
+            <Card className="border border-gray-800 bg-gray-900 shadow-xl">
+              <CardHeader className="px-6 py-4">
+                <CardTitle className="text-lg font-semibold text-white">Holdings</CardTitle>
+                <CardDescription className="text-gray-400">Your investment positions sorted by value</CardDescription>
+              </CardHeader>
+              <CardContent className="px-6 pb-6">
+                {sortedHoldings.length === 0 ? (
+                  <div className="text-center py-8">
                     <p className="text-gray-400">No holdings found. Add your first transaction to get started!</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                filteredHoldings.map((holding) => {
-                  const badgeProps = getAssetTypeBadge(holding.assetType)
-                  const convertedCurrentValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
-                  const convertedCurrentPrice = convertCurrency(holding.currentPrice, holding.currency, displayCurrency)
-                  const convertedAvgCost = convertCurrency(holding.avg_cost_basis, holding.currency, displayCurrency)
-                  const convertedTotalInvested = convertCurrency(
-                    holding.total_invested,
-                    holding.currency,
-                    displayCurrency,
-                  )
-                  const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    {/* Table Header - EQUAL SPACING */}
+                    <div className="grid grid-cols-10 gap-4 py-4 px-4 border-b border-gray-700 bg-gray-800/30 rounded-t-lg text-sm font-medium text-gray-300">
+                      <div className="col-span-1 flex items-center justify-center h-6">Symbol</div>
+                      <div className="col-span-2 flex items-center">Name</div>
+                      <div className="col-span-1 flex items-center justify-center">Shares</div>
+                      <div className="col-span-1 flex items-center justify-end">Avg Cost</div>
+                      <div className="col-span-1 flex items-center justify-end">Current</div>
+                      <div className="col-span-1 flex items-center justify-end">Cost Basis</div>
+                      <div className="col-span-1 flex items-center justify-end">Market Value</div>
+                      <div className="col-span-2 flex items-center justify-end">Gain/Loss</div>
+                    </div>
 
-                  return (
-                    <Card key={holding.symbol} className="border border-gray-800 bg-gray-900 shadow-xl">
-                      <CardContent className="p-6">
-                        <div className="flex flex-col gap-4">
-                          {/* Header Row */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-1">
+                    {/* Table Rows - EQUAL SPACING */}
+                    <div className="divide-y divide-gray-800">
+                      {sortedHoldings.map((holding) => {
+                        const badgeProps = getAssetTypeBadge(holding.assetType)
+                        const convertedCurrentValue = convertCurrency(
+                          holding.currentValue,
+                          holding.currency,
+                          displayCurrency,
+                        )
+                        const convertedCurrentPrice = convertCurrency(
+                          holding.currentPrice,
+                          holding.currency,
+                          displayCurrency,
+                        )
+                        const convertedAvgCost = convertCurrency(
+                          holding.avg_cost_basis,
+                          holding.currency,
+                          displayCurrency,
+                        )
+                        const convertedTotalInvested = convertCurrency(
+                          holding.total_invested,
+                          holding.currency,
+                          displayCurrency,
+                        )
+                        const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
+
+                        return (
+                          <div
+                            key={holding.symbol}
+                            className="grid grid-cols-10 gap-4 py-4 px-4 hover:bg-gray-800/30 transition-colors text-sm"
+                          >
+                            {/* Symbol with maximum 4 characters */}
+                            <div className="col-span-1 flex flex-col items-center justify-center">
                               <div
-                                className="w-12 h-12 rounded-lg flex items-center justify-center border flex-shrink-0"
+                                className="w-10 h-8 rounded-lg flex items-center justify-center text-xs font-bold mb-1"
                                 style={{
                                   backgroundColor: badgeProps.color + "20",
-                                  borderColor: badgeProps.color + "30",
+                                  color: badgeProps.color,
                                 }}
                               >
-                                <span className="font-semibold text-sm" style={{ color: badgeProps.color }}>
-                                  {holding.symbol.slice(0, 2)}
+                                {formatSymbol(holding.symbol)}
+                              </div>
+                              <Badge variant="outline" className={`${badgeProps.className} text-xs py-0 px-1`}>
+                                {badgeProps.label.split(" ")[0]}
+                              </Badge>
+                            </div>
+
+                            {/* Name */}
+                            <div className="col-span-2 flex flex-col justify-center">
+                              <p className="font-medium text-white truncate">{holding.symbol}</p>
+                              <p className="text-xs text-gray-400 truncate">{holding.company_name}</p>
+                            </div>
+
+                            {/* Shares */}
+                            <div className="col-span-1 flex items-center justify-center">
+                              <span className="text-white font-medium">{holding.total_shares.toLocaleString()}</span>
+                            </div>
+
+                            {/* Avg Cost */}
+                            <div className="col-span-1 flex items-center justify-end">
+                              <span className="text-white">{formatCurrency(convertedAvgCost, displayCurrency)}</span>
+                            </div>
+
+                            {/* Current Price */}
+                            <div className="col-span-1 flex items-center justify-end">
+                              <span className="text-white">
+                                {formatCurrency(convertedCurrentPrice, displayCurrency)}
+                              </span>
+                            </div>
+
+                            {/* Cost Basis */}
+                            <div className="col-span-1 flex items-center justify-end">
+                              <span className="text-white">
+                                {formatCurrency(convertedTotalInvested, displayCurrency)}
+                              </span>
+                            </div>
+
+                            {/* Market Value */}
+                            <div className="col-span-1 flex items-center justify-end">
+                              <span className="text-white font-medium">
+                                {formatCurrency(convertedCurrentValue, displayCurrency)}
+                              </span>
+                            </div>
+
+                            {/* Gain/Loss */}
+                            <div className="col-span-2 flex flex-col items-end justify-center">
+                              <div
+                                className={`flex items-center ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}
+                              >
+                                {holding.gainLoss >= 0 ? (
+                                  <ArrowUp className="w-3 h-3 mr-1" />
+                                ) : (
+                                  <ArrowDown className="w-3 h-3 mr-1" />
+                                )}
+                                <span className="font-medium">
+                                  {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
                                 </span>
                               </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h3 className="font-semibold text-white text-base">{holding.symbol}</h3>
-                                  <Badge variant="outline" className={badgeProps.className}>
-                                    {badgeProps.label}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-gray-400 truncate">{holding.company_name}</p>
-                              </div>
-                            </div>
-
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="hover:bg-gray-800 text-gray-400 hover:text-white"
-                                >
-                                  <MoreHorizontal className="w-4 h-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="border-gray-800 bg-gray-900 text-gray-300">
-                                <DropdownMenuItem className="hover:bg-gray-800 hover:text-white">
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-gray-800 hover:text-white">
-                                  Buy More
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="hover:bg-gray-800 hover:text-white">Sell</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-
-                          {/* Data Grid */}
-                          <div className="grid grid-cols-2 lg:grid-cols-6 gap-4 text-sm">
-                            <div>
-                              <p className="text-gray-400 mb-1">
-                                {holding.assetType === "THAI_GOLD" ? "Amount" : "Shares"}
-                              </p>
-                              <p className="font-semibold text-white">{holding.total_shares.toLocaleString()}</p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400 mb-1">Avg Cost</p>
-                              <p className="font-semibold text-white">
-                                {formatCurrency(convertedAvgCost, displayCurrency)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400 mb-1">Current Price</p>
-                              <p className="font-semibold text-white">
-                                {formatCurrency(convertedCurrentPrice, displayCurrency)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400 mb-1">Cost Basis</p>
-                              <p className="font-semibold text-white">
-                                {formatCurrency(convertedTotalInvested, displayCurrency)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400 mb-1">Market Value</p>
-                              <p className="font-semibold text-white">
-                                {formatCurrency(convertedCurrentValue, displayCurrency)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-gray-400 mb-1">Gain/Loss</p>
-                              <div className="space-y-1">
-                                <div
-                                  className={`flex items-center ${holding.gainLoss >= 0 ? "text-[#30D158]" : "text-[#FF453A]"}`}
-                                >
-                                  {holding.gainLoss >= 0 ? (
-                                    <ArrowUp className="w-3 h-3 mr-1" />
-                                  ) : (
-                                    <ArrowDown className="w-3 h-3 mr-1" />
-                                  )}
-                                  <span className="font-semibold">
-                                    {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
-                                  </span>
-                                </div>
-                                <div
-                                  className={`text-xs ${holding.gainLoss >= 0 ? "text-[#30D158]" : "text-[#FF453A]"}`}
-                                >
-                                  {holding.gainLossPercent >= 0 ? "+" : ""}
-                                  {holding.gainLossPercent.toFixed(1)}%
-                                </div>
+                              <div className={`text-xs ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}>
+                                {holding.gainLossPercent >= 0 ? "+" : ""}
+                                {holding.gainLossPercent.toFixed(1)}%
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )
-                })
-              )}
-            </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
             <Card className="border border-gray-800 bg-gray-900 shadow-xl">
               <CardHeader className="px-6 py-4">
                 <CardTitle className="text-lg font-semibold text-white">Recent Transactions</CardTitle>
-                <CardDescription className="text-gray-400">Your latest investment activities</CardDescription>
+                <CardDescription className="text-gray-400">
+                  Your latest investment activities (sorted by date)
+                </CardDescription>
               </CardHeader>
               <CardContent className="px-6 pb-6">
                 <div className="space-y-3">
-                  {transactions.length === 0 ? (
+                  {sortedTransactions.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-400">No transactions yet. Add your first transaction to get started!</p>
                     </div>
                   ) : (
-                    transactions.slice(0, 10).map((transaction) => (
+                    sortedTransactions.slice(0, 10).map((transaction) => (
                       <div
                         key={transaction.id}
-                        className="flex items-center justify-between p-4 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors"
+                        className="flex items-center justify-between p-4 border border-gray-800 rounded-lg hover:bg-gray-800/70 hover:border-gray-700 transition-all duration-200"
                       >
                         <div className="flex items-center gap-3 flex-1">
                           <Badge
@@ -769,7 +835,7 @@ export default function Component() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEditTransaction(transaction)}
-                              className="hover:bg-blue-900/20 text-blue-400 hover:text-blue-300"
+                              className="hover:bg-blue-900/30 text-blue-400 hover:text-blue-300 transition-all duration-200"
                               title="Edit transaction"
                             >
                               <Edit className="w-4 h-4" />
@@ -781,7 +847,7 @@ export default function Component() {
                                 setTransactionToDelete(transaction)
                                 setDeleteDialogOpen(true)
                               }}
-                              className="hover:bg-red-900/20 text-red-400 hover:text-red-300"
+                              className="hover:bg-red-900/30 text-red-400 hover:text-red-300 transition-all duration-200"
                               title="Delete transaction"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -902,7 +968,9 @@ export default function Component() {
               )}
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-gray-700 text-gray-300 hover:bg-gray-800">Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                Cancel
+              </AlertDialogCancel>
               <AlertDialogAction onClick={handleDeleteTransaction} className="bg-red-600 hover:bg-red-700 text-white">
                 Delete Transaction
               </AlertDialogAction>
@@ -928,7 +996,7 @@ export default function Component() {
                     <select
                       value={editFormData.transaction_type}
                       onChange={(e) => setEditFormData({ ...editFormData, transaction_type: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm hover:border-gray-600 focus:border-blue-500 transition-colors"
                     >
                       <option value="BUY">Buy</option>
                       <option value="SELL">Sell</option>
@@ -941,7 +1009,7 @@ export default function Component() {
                       type="date"
                       value={editFormData.transaction_date}
                       onChange={(e) => setEditFormData({ ...editFormData, transaction_date: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm hover:border-gray-600 focus:border-blue-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -954,7 +1022,7 @@ export default function Component() {
                       step="0.0001"
                       value={editFormData.shares}
                       onChange={(e) => setEditFormData({ ...editFormData, shares: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm hover:border-gray-600 focus:border-blue-500 transition-colors"
                     />
                   </div>
                   <div>
@@ -964,7 +1032,7 @@ export default function Component() {
                       step="0.01"
                       value={editFormData.price_per_share}
                       onChange={(e) => setEditFormData({ ...editFormData, price_per_share: e.target.value })}
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm hover:border-gray-600 focus:border-blue-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -974,7 +1042,7 @@ export default function Component() {
                   <textarea
                     value={editFormData.notes}
                     onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm hover:border-gray-600 focus:border-blue-500 transition-colors"
                     rows={2}
                   />
                 </div>
@@ -994,7 +1062,9 @@ export default function Component() {
             )}
 
             <AlertDialogFooter>
-              <AlertDialogCancel className="border-gray-700 text-gray-300 hover:bg-gray-800">Cancel</AlertDialogCancel>
+              <AlertDialogCancel className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors">
+                Cancel
+              </AlertDialogCancel>
               <AlertDialogAction onClick={handleEditSubmit} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Save Changes
               </AlertDialogAction>

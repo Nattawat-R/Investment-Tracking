@@ -191,7 +191,7 @@ export function generatePortfolioHistory(
   return data
 }
 
-// Calculate individual asset allocation for pie chart
+// Calculate individual asset allocation for pie chart with PROPER SORTING
 export function calculateAssetAllocation(
   holdings: EnrichedHolding[],
   displayCurrency = "USD",
@@ -202,6 +202,8 @@ export function calculateAssetAllocation(
   percentage: number
   assetType: "STOCK" | "CRYPTO" | "THAI_STOCK" | "THAI_GOLD"
   color: string
+  gainLoss: number
+  gainLossPercent: number
 }> {
   if (holdings.length === 0) return []
 
@@ -216,11 +218,11 @@ export function calculateAssetAllocation(
   const assetTypeColorVariations = {
     STOCK: ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE", "#DBEAFE", "#EFF6FF", "#F0F9FF"], // Blue variations
     THAI_STOCK: ["#059669", "#10B981", "#34D399", "#6EE7B7", "#9DECCC", "#C6F6D5", "#D1FAE5", "#ECFDF5"], // Green variations
-    CRYPTO: ["#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#F3F4F6", "#FAFAFA"], // Purple variations (updated)
+    CRYPTO: ["#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#F3F4F6", "#FAFAFA"], // Purple variations
     THAI_GOLD: ["#CA8A04", "#EAB308", "#FACC15", "#FDE047", "#FEF08A", "#FEFCE8", "#FFFBEB", "#FEFCE8"], // Yellow variations
   }
 
-  // Group by asset type and assign colors
+  // Group by asset type and assign colors (keep same logic for pie chart)
   const groupedByType = holdings.reduce(
     (acc, holding) => {
       if (!acc[holding.assetType]) {
@@ -239,9 +241,11 @@ export function calculateAssetAllocation(
     percentage: number
     assetType: "STOCK" | "CRYPTO" | "THAI_STOCK" | "THAI_GOLD"
     color: string
+    gainLoss: number
+    gainLossPercent: number
   }> = []
 
-  // Process each asset type group
+  // Process each asset type group (keep same color assignment logic)
   Object.entries(groupedByType).forEach(([assetType, holdings]) => {
     const colors = assetTypeColorVariations[assetType as keyof typeof assetTypeColorVariations]
 
@@ -263,13 +267,8 @@ export function calculateAssetAllocation(
     })
   })
 
-  // Sort by asset type and then by value to group similar types together
-  const typeOrder = ["STOCK", "THAI_STOCK", "CRYPTO", "THAI_GOLD"]
-  result.sort((a, b) => {
-    const typeComparison = typeOrder.indexOf(a.assetType) - typeOrder.indexOf(b.assetType)
-    if (typeComparison !== 0) return typeComparison
-    return b.value - a.value // Within same type, sort by value descending
-  })
+  // CHANGED: Sort by percentage/value descending (max to min allocation)
+  result.sort((a, b) => b.percentage - a.percentage)
 
   return result
 }
