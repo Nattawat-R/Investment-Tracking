@@ -42,6 +42,65 @@ export async function addTransaction(formData: FormData) {
   }
 }
 
+export async function updateTransaction(
+  transactionId: string,
+  updateData: {
+    transaction_type: string
+    shares: string
+    price_per_share: string
+    transaction_date: string
+    notes: string
+  },
+) {
+  const shares = Number.parseFloat(updateData.shares)
+  const pricePerShare = Number.parseFloat(updateData.price_per_share)
+  const totalAmount = shares * pricePerShare
+
+  try {
+    const { data, error } = await supabase
+      .from("transactions")
+      .update({
+        transaction_type: updateData.transaction_type as "BUY" | "SELL" | "DIVIDEND",
+        shares,
+        price_per_share: pricePerShare,
+        total_amount: totalAmount,
+        transaction_date: updateData.transaction_date,
+        notes: updateData.notes || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", transactionId)
+      .select()
+
+    if (error) {
+      console.error("Error updating transaction:", error)
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath("/")
+    return { success: true, data }
+  } catch (error) {
+    console.error("Error updating transaction:", error)
+    return { success: false, error: "Failed to update transaction" }
+  }
+}
+
+export async function deleteTransaction(transactionId: string) {
+  try {
+    const { error } = await supabase.from("transactions").delete().eq("id", transactionId)
+
+    if (error) {
+      console.error("Error deleting transaction:", error)
+      return { success: false, error: error.message }
+    }
+
+    revalidatePath("/")
+    return { success: true }
+  } catch (error) {
+    console.error("Error deleting transaction:", error)
+    return { success: false, error: "Failed to delete transaction" }
+  }
+}
+
 export async function getTransactions(): Promise<Transaction[]> {
   try {
     const { data, error } = await supabase

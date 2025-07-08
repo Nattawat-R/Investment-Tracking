@@ -18,6 +18,7 @@ import {
 import { Plus, Search } from "lucide-react"
 import { addTransaction } from "@/app/actions/transactions"
 import type { StockInfo } from "@/lib/financial-api"
+import { getAssetTypeBadge } from "@/lib/financial-api"
 
 export default function AddTransactionForm() {
   const [isOpen, setIsOpen] = useState(false)
@@ -65,30 +66,6 @@ export default function AddTransactionForm() {
     }
   }
 
-  const getAssetTypeBadge = (assetType: string) => {
-    switch (assetType) {
-      case "THAI_STOCK":
-        return (
-          <Badge variant="outline" className="text-xs bg-green-500/20 text-green-400 border-green-500/30">
-            Thai Stock
-          </Badge>
-        )
-      case "CRYPTO":
-        return (
-          <Badge variant="outline" className="text-xs bg-orange-500/20 text-orange-400 border-orange-500/30">
-            Crypto
-          </Badge>
-        )
-      case "STOCK":
-      default:
-        return (
-          <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-400 border-blue-500/30">
-            US Stock
-          </Badge>
-        )
-    }
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -103,7 +80,9 @@ export default function AddTransactionForm() {
           <DialogDescription className="text-gray-400">
             Record a new buy, sell, or dividend transaction for your portfolio.
             <br />
-            <span className="text-xs text-gray-500">Supports US stocks, Thai stocks (SET), and cryptocurrencies</span>
+            <span className="text-xs text-gray-500">
+              Supports US stocks, Thai stocks (SET), cryptocurrencies, and Thai Gold
+            </span>
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +96,7 @@ export default function AddTransactionForm() {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
               <Input
                 id="stock-search"
-                placeholder="Search stocks, crypto, or Thai stocks (e.g., AAPL, BTC, PTT)..."
+                placeholder="Search stocks, crypto, Thai stocks, or Thai Gold (e.g., AAPL, BTC, PTT, GOLD96.5)..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -129,35 +108,40 @@ export default function AddTransactionForm() {
 
             {isSearching && (
               <div className="text-xs text-gray-400 px-3 py-2">
-                Searching across US stocks, Thai stocks, and cryptocurrencies...
+                Searching across US stocks, Thai stocks, cryptocurrencies, and Thai Gold...
               </div>
             )}
 
             {searchResults.length > 0 && (
               <div className="max-h-60 overflow-y-auto bg-gray-800 border border-gray-700 rounded-md">
-                {searchResults.map((stock, index) => (
-                  <button
-                    key={`${stock.symbol}-${index}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedStock(stock)
-                      setSearchQuery(`${stock.symbol} - ${stock.name}`)
-                      setSearchResults([])
-                    }}
-                    className="w-full text-left p-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="font-semibold text-white">{stock.symbol}</div>
-                        <div className="text-sm text-gray-400">{stock.name}</div>
-                        <div className="text-xs text-gray-500">
-                          {stock.exchange} • {stock.currency}
+                {searchResults.map((stock, index) => {
+                  const badgeProps = getAssetTypeBadge(stock.assetType)
+                  return (
+                    <button
+                      key={`${stock.symbol}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedStock(stock)
+                        setSearchQuery(`${stock.symbol} - ${stock.name}`)
+                        setSearchResults([])
+                      }}
+                      className="w-full text-left p-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold text-white">{stock.symbol}</div>
+                          <div className="text-sm text-gray-400">{stock.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {stock.exchange} • {stock.currency}
+                          </div>
                         </div>
+                        <Badge variant="outline" className={badgeProps.className}>
+                          {badgeProps.label}
+                        </Badge>
                       </div>
-                      {getAssetTypeBadge(stock.assetType)}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -173,7 +157,9 @@ export default function AddTransactionForm() {
                     {selectedStock.exchange} • {selectedStock.currency}
                   </div>
                 </div>
-                {getAssetTypeBadge(selectedStock.assetType)}
+                <Badge variant="outline" className={getAssetTypeBadge(selectedStock.assetType).className}>
+                  {getAssetTypeBadge(selectedStock.assetType).label}
+                </Badge>
               </div>
             </div>
           )}
@@ -226,7 +212,11 @@ export default function AddTransactionForm() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="shares" className="text-gray-300">
-                {selectedStock?.assetType === "CRYPTO" ? "Amount" : "Shares"}
+                {selectedStock?.assetType === "CRYPTO"
+                  ? "Amount"
+                  : selectedStock?.assetType === "THAI_GOLD"
+                    ? "Weight (grams)"
+                    : "Shares"}
               </Label>
               <Input
                 id="shares"
@@ -242,8 +232,13 @@ export default function AddTransactionForm() {
 
             <div className="space-y-2">
               <Label htmlFor="pricePerShare" className="text-gray-300">
-                Price per {selectedStock?.assetType === "CRYPTO" ? "Unit" : "Share"} ({selectedStock?.currency || "USD"}
-                )
+                Price per{" "}
+                {selectedStock?.assetType === "CRYPTO"
+                  ? "Unit"
+                  : selectedStock?.assetType === "THAI_GOLD"
+                    ? "Gram"
+                    : "Share"}{" "}
+                ({selectedStock?.currency || "USD"})
               </Label>
               <Input
                 id="pricePerShare"
