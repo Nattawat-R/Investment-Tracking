@@ -103,7 +103,7 @@ export default function Component() {
       (holding.company_name && holding.company_name.toLowerCase().includes(searchTerm.toLowerCase())),
   )
 
-  // Mock portfolio history data - you can implement real historical calculation
+  // Mock portfolio history data
   const portfolioData = [
     { date: "Jan", value: Math.max(0, portfolioSummary.totalValue - 15000) },
     { date: "Feb", value: Math.max(0, portfolioSummary.totalValue - 12000) },

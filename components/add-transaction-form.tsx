@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,30 @@ export default function AddTransactionForm() {
     }
   }
 
+  const getAssetTypeBadge = (assetType: string) => {
+    switch (assetType) {
+      case "THAI_STOCK":
+        return (
+          <Badge variant="outline" className="text-xs bg-green-500/20 text-green-400 border-green-500/30">
+            Thai Stock
+          </Badge>
+        )
+      case "CRYPTO":
+        return (
+          <Badge variant="outline" className="text-xs bg-orange-500/20 text-orange-400 border-orange-500/30">
+            Crypto
+          </Badge>
+        )
+      case "STOCK":
+      default:
+        return (
+          <Badge variant="outline" className="text-xs bg-blue-500/20 text-blue-400 border-blue-500/30">
+            US Stock
+          </Badge>
+        )
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -77,6 +102,8 @@ export default function AddTransactionForm() {
           <DialogTitle className="text-white">Add New Transaction</DialogTitle>
           <DialogDescription className="text-gray-400">
             Record a new buy, sell, or dividend transaction for your portfolio.
+            <br />
+            <span className="text-xs text-gray-500">Supports US stocks, Thai stocks (SET), and cryptocurrencies</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -84,13 +111,13 @@ export default function AddTransactionForm() {
           {/* Stock Search */}
           <div className="space-y-2">
             <Label htmlFor="stock-search" className="text-gray-300">
-              Search Stock
+              Search Asset
             </Label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
               <Input
                 id="stock-search"
-                placeholder="Search by symbol or company name..."
+                placeholder="Search stocks, crypto, or Thai stocks (e.g., AAPL, BTC, PTT)..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -100,11 +127,17 @@ export default function AddTransactionForm() {
               />
             </div>
 
+            {isSearching && (
+              <div className="text-xs text-gray-400 px-3 py-2">
+                Searching across US stocks, Thai stocks, and cryptocurrencies...
+              </div>
+            )}
+
             {searchResults.length > 0 && (
-              <div className="max-h-40 overflow-y-auto bg-gray-800 border border-gray-700 rounded-md">
-                {searchResults.map((stock) => (
+              <div className="max-h-60 overflow-y-auto bg-gray-800 border border-gray-700 rounded-md">
+                {searchResults.map((stock, index) => (
                   <button
-                    key={stock.symbol}
+                    key={`${stock.symbol}-${index}`}
                     type="button"
                     onClick={() => {
                       setSelectedStock(stock)
@@ -113,18 +146,44 @@ export default function AddTransactionForm() {
                     }}
                     className="w-full text-left p-3 hover:bg-gray-700 border-b border-gray-700 last:border-b-0"
                   >
-                    <div className="font-semibold text-white">{stock.symbol}</div>
-                    <div className="text-sm text-gray-400">{stock.name}</div>
-                    <div className="text-xs text-gray-500">{stock.exchange}</div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold text-white">{stock.symbol}</div>
+                        <div className="text-sm text-gray-400">{stock.name}</div>
+                        <div className="text-xs text-gray-500">
+                          {stock.exchange} • {stock.currency}
+                        </div>
+                      </div>
+                      {getAssetTypeBadge(stock.assetType)}
+                    </div>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
+          {/* Selected Asset Info */}
+          {selectedStock && (
+            <div className="p-3 bg-gray-800 rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-white">{selectedStock.symbol}</div>
+                  <div className="text-sm text-gray-400">{selectedStock.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {selectedStock.exchange} • {selectedStock.currency}
+                  </div>
+                </div>
+                {getAssetTypeBadge(selectedStock.assetType)}
+              </div>
+            </div>
+          )}
+
           {/* Hidden inputs for selected stock */}
           <input type="hidden" name="symbol" value={selectedStock?.symbol || ""} />
           <input type="hidden" name="companyName" value={selectedStock?.name || ""} />
+          <input type="hidden" name="assetType" value={selectedStock?.assetType || ""} />
+          <input type="hidden" name="currency" value={selectedStock?.currency || ""} />
+          <input type="hidden" name="exchange" value={selectedStock?.exchange || ""} />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -167,7 +226,7 @@ export default function AddTransactionForm() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="shares" className="text-gray-300">
-                Shares
+                {selectedStock?.assetType === "CRYPTO" ? "Amount" : "Shares"}
               </Label>
               <Input
                 id="shares"
@@ -183,7 +242,8 @@ export default function AddTransactionForm() {
 
             <div className="space-y-2">
               <Label htmlFor="pricePerShare" className="text-gray-300">
-                Price per Share
+                Price per {selectedStock?.assetType === "CRYPTO" ? "Unit" : "Share"} ({selectedStock?.currency || "USD"}
+                )
               </Label>
               <Input
                 id="pricePerShare"
