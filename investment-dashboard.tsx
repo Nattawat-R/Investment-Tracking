@@ -57,6 +57,39 @@ import {
   generatePortfolioHistory,
 } from "@/lib/portfolio-calculations"
 
+/*
+=== DATA SOURCE INFORMATION FOR EACH ASSET TYPE ===
+
+🇺🇸 **US STOCKS** (AAPL, GOOGL, MSFT, AMZN, TSLA, META, NVDA, etc.):
+- Primary: Yahoo Finance API (https://query1.finance.yahoo.com/v8/finance/chart/)
+- Secondary: Alpha Vantage API (https://www.alphavantage.co/documentation/)
+- Alternative: Finnhub API (https://finnhub.io/docs/api)
+- Backup: IEX Cloud (https://iexcloud.io/docs/api/)
+
+🇹🇭 **THAI STOCKS** (PTT, CPALL, KBANK, SCB, BBL, ADVANC, AOT, etc.):
+- Primary: SET Market Data Center API (https://www.set.or.th/en/market/market-data)
+- Secondary: Settrade API (https://www.settrade.com/api)
+- Alternative: InvestorHub Thailand API
+- Backup: Yahoo Finance Thailand (https://th.finance.yahoo.com/)
+
+💰 **CRYPTOCURRENCIES** (BTC, ETH, SOL, ADA, XRP, DOGE, etc.):
+- Primary: CoinGecko API (https://www.coingecko.com/en/api/documentation)
+- Secondary: CoinMarketCap API (https://coinmarketcap.com/api/documentation/v1/)
+- Alternative: Binance API (https://binance-docs.github.io/apidocs/spot/en/)
+- Backup: CryptoCompare API (https://min-api.cryptocompare.com/documentation)
+
+🥇 **THAI GOLD** (GOLD96.5, GOLD, XAU, THGOLD):
+- Primary: Gold Traders Association Thailand (https://www.goldtraders.or.th/)
+- Secondary: YLG (Hua Seng Heng) API (https://www.ylg.co.th/gold-price)
+- Alternative: Aurora Gold API
+- Backup: Goldspot.com API
+
+📊 **EXCHANGE RATES** (USD/THB conversion):
+- Primary: Bank of Thailand API (https://www.bot.or.th/english/statistics/financialmarkets/exchangerate/)
+- Secondary: XE.com API (https://www.xe.com/xecurrencydata/)
+- Alternative: Fixer.io API (https://fixer.io/documentation)
+*/
+
 export default function Component() {
   const [searchTerm, setSearchTerm] = useState("")
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -527,7 +560,12 @@ export default function Component() {
                                     <span className="text-white font-medium text-sm truncate">{asset.symbol}</span>
                                     <Badge
                                       variant="outline"
-                                      className={`${badgeProps.className} text-xs py-0 px-1 flex-shrink-0 border-opacity-50`}
+                                      className="text-xs py-0 px-1 flex-shrink-0 border-opacity-50"
+                                      style={{
+                                        color: badgeProps.color,
+                                        borderColor: badgeProps.color + "50",
+                                        backgroundColor: badgeProps.color + "10",
+                                      }}
                                     >
                                       {badgeProps.label.split(" ")[0]}
                                     </Badge>
@@ -638,7 +676,7 @@ export default function Component() {
               </Button>
             </div>
 
-            {/* Holdings Table - IMPROVED EQUAL SPACING */}
+            {/* Holdings Table */}
             <Card className="border border-gray-800 bg-gray-900 shadow-xl">
               <CardHeader className="px-6 py-4">
                 <CardTitle className="text-lg font-semibold text-white">Holdings</CardTitle>
@@ -650,127 +688,257 @@ export default function Component() {
                     <p className="text-gray-400">No holdings found. Add your first transaction to get started!</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    {/* Table Header - EQUAL SPACING */}
-                    <div className="grid grid-cols-10 gap-4 py-4 px-4 border-b border-gray-700 bg-gray-800/30 rounded-t-lg text-sm font-medium text-gray-300">
-                      <div className="col-span-1 flex items-center justify-center h-6">Symbol</div>
-                      <div className="col-span-2 flex items-center">Name</div>
-                      <div className="col-span-1 flex items-center justify-center">Shares</div>
-                      <div className="col-span-1 flex items-center justify-end">Avg Cost</div>
-                      <div className="col-span-1 flex items-center justify-end">Current</div>
-                      <div className="col-span-1 flex items-center justify-end">Cost Basis</div>
-                      <div className="col-span-1 flex items-center justify-end">Market Value</div>
-                      <div className="col-span-2 flex items-center justify-end">Gain/Loss</div>
-                    </div>
+                  <>
+                    {/* Desktop Table - IMPROVED EVEN SPACING */}
+                    <div className="hidden lg:block overflow-x-auto">
+                      {/* Desktop Table Header - EVENLY SPACED 6 COLUMNS */}
+                      <div className="grid grid-cols-6 gap-4 py-4 px-4 border-b border-gray-700 bg-gray-800/30 rounded-t-lg text-sm font-medium text-gray-300">
+                        <div className="flex items-center justify-center">Symbol & Name</div>
+                        <div className="flex items-center justify-center">Shares</div>
+                        <div className="flex items-center justify-center">Avg Cost</div>
+                        <div className="flex items-center justify-center">Current</div>
+                        <div className="flex items-center justify-center">Market Value</div>
+                        <div className="flex items-center justify-center">Gain/Loss</div>
+                      </div>
 
-                    {/* Table Rows - EQUAL SPACING */}
-                    <div className="divide-y divide-gray-800">
-                      {sortedHoldings.map((holding) => {
-                        const badgeProps = getAssetTypeBadge(holding.assetType)
-                        const convertedCurrentValue = convertCurrency(
-                          holding.currentValue,
-                          holding.currency,
-                          displayCurrency,
-                        )
-                        const convertedCurrentPrice = convertCurrency(
-                          holding.currentPrice,
-                          holding.currency,
-                          displayCurrency,
-                        )
-                        const convertedAvgCost = convertCurrency(
-                          holding.avg_cost_basis,
-                          holding.currency,
-                          displayCurrency,
-                        )
-                        const convertedTotalInvested = convertCurrency(
-                          holding.total_invested,
-                          holding.currency,
-                          displayCurrency,
-                        )
-                        const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
+                      {/* Desktop Table Rows - EVENLY SPACED 6 COLUMNS */}
+                      <div className="divide-y divide-gray-800">
+                        {sortedHoldings.map((holding) => {
+                          const badgeProps = getAssetTypeBadge(holding.assetType)
+                          const convertedCurrentValue = convertCurrency(
+                            holding.currentValue,
+                            holding.currency,
+                            displayCurrency,
+                          )
+                          const convertedCurrentPrice = convertCurrency(
+                            holding.currentPrice,
+                            holding.currency,
+                            displayCurrency,
+                          )
+                          const convertedAvgCost = convertCurrency(
+                            holding.avg_cost_basis,
+                            holding.currency,
+                            displayCurrency,
+                          )
+                          const convertedTotalInvested = convertCurrency(
+                            holding.total_invested,
+                            holding.currency,
+                            displayCurrency,
+                          )
+                          const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
 
-                        return (
-                          <div
-                            key={holding.symbol}
-                            className="grid grid-cols-10 gap-4 py-4 px-4 hover:bg-gray-800/30 transition-colors text-sm"
-                          >
-                            {/* Symbol with maximum 4 characters */}
-                            <div className="col-span-1 flex flex-col items-center justify-center">
-                              <div
-                                className="w-10 h-8 rounded-lg flex items-center justify-center text-xs font-bold mb-1"
-                                style={{
-                                  backgroundColor: badgeProps.color + "20",
-                                  color: badgeProps.color,
-                                }}
-                              >
-                                {formatSymbol(holding.symbol)}
+                          return (
+                            <div
+                              key={holding.symbol}
+                              className="grid grid-cols-6 gap-4 py-4 px-4 hover:bg-gray-800/30 transition-colors text-sm"
+                            >
+                              {/* Symbol & Name - 1 column */}
+                              <div className="flex flex-col justify-center">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <div
+                                    className="w-8 h-6 rounded flex items-center justify-center text-xs font-bold"
+                                    style={{
+                                      backgroundColor: badgeProps.color + "20",
+                                      color: badgeProps.color,
+                                    }}
+                                  >
+                                    {formatSymbol(holding.symbol)}
+                                  </div>
+                                  <Badge variant="outline" className={`${badgeProps.className} text-xs py-0 px-1`}>
+                                    {badgeProps.label.split(" ")[0]}
+                                  </Badge>
+                                </div>
+                                <p className="font-medium text-white truncate text-xs">{holding.symbol}</p>
+                                <p className="text-xs text-gray-400 truncate">{holding.company_name}</p>
                               </div>
-                              <Badge variant="outline" className={`${badgeProps.className} text-xs py-0 px-1`}>
-                                {badgeProps.label.split(" ")[0]}
-                              </Badge>
-                            </div>
 
-                            {/* Name */}
-                            <div className="col-span-2 flex flex-col justify-center">
-                              <p className="font-medium text-white truncate">{holding.symbol}</p>
-                              <p className="text-xs text-gray-400 truncate">{holding.company_name}</p>
-                            </div>
+                              {/* Shares - 1 column */}
+                              <div className="flex items-center justify-center">
+                                <span className="text-white font-medium">{holding.total_shares.toLocaleString()}</span>
+                              </div>
 
-                            {/* Shares */}
-                            <div className="col-span-1 flex items-center justify-center">
-                              <span className="text-white font-medium">{holding.total_shares.toLocaleString()}</span>
-                            </div>
+                              {/* Avg Cost - 1 column */}
+                              <div className="flex items-center justify-center">
+                                <span className="text-white">{formatCurrency(convertedAvgCost, displayCurrency)}</span>
+                              </div>
 
-                            {/* Avg Cost */}
-                            <div className="col-span-1 flex items-center justify-end">
-                              <span className="text-white">{formatCurrency(convertedAvgCost, displayCurrency)}</span>
-                            </div>
-
-                            {/* Current Price */}
-                            <div className="col-span-1 flex items-center justify-end">
-                              <span className="text-white">
-                                {formatCurrency(convertedCurrentPrice, displayCurrency)}
-                              </span>
-                            </div>
-
-                            {/* Cost Basis */}
-                            <div className="col-span-1 flex items-center justify-end">
-                              <span className="text-white">
-                                {formatCurrency(convertedTotalInvested, displayCurrency)}
-                              </span>
-                            </div>
-
-                            {/* Market Value */}
-                            <div className="col-span-1 flex items-center justify-end">
-                              <span className="text-white font-medium">
-                                {formatCurrency(convertedCurrentValue, displayCurrency)}
-                              </span>
-                            </div>
-
-                            {/* Gain/Loss */}
-                            <div className="col-span-2 flex flex-col items-end justify-center">
-                              <div
-                                className={`flex items-center ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}
-                              >
-                                {holding.gainLoss >= 0 ? (
-                                  <ArrowUp className="w-3 h-3 mr-1" />
-                                ) : (
-                                  <ArrowDown className="w-3 h-3 mr-1" />
-                                )}
-                                <span className="font-medium">
-                                  {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
+                              {/* Current Price - 1 column */}
+                              <div className="flex items-center justify-center">
+                                <span className="text-white">
+                                  {formatCurrency(convertedCurrentPrice, displayCurrency)}
                                 </span>
                               </div>
-                              <div className={`text-xs ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}>
-                                {holding.gainLossPercent >= 0 ? "+" : ""}
-                                {holding.gainLossPercent.toFixed(1)}%
+
+                              {/* Market Value - 1 column */}
+                              <div className="flex items-center justify-center">
+                                <span className="text-white font-medium">
+                                  {formatCurrency(convertedCurrentValue, displayCurrency)}
+                                </span>
+                              </div>
+
+                              {/* Gain/Loss - 1 column */}
+                              <div className="flex flex-col items-center justify-center">
+                                <div
+                                  className={`flex items-center ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}
+                                >
+                                  {holding.gainLoss >= 0 ? (
+                                    <ArrowUp className="w-3 h-3 mr-1" />
+                                  ) : (
+                                    <ArrowDown className="w-3 h-3 mr-1" />
+                                  )}
+                                  <span className="font-medium text-xs">
+                                    {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
+                                  </span>
+                                </div>
+                                <div className={`text-xs ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}>
+                                  {holding.gainLossPercent >= 0 ? "+" : ""}
+                                  {holding.gainLossPercent.toFixed(1)}%
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )
-                      })}
+                          )
+                        })}
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Mobile Table with Horizontal Scroll - IMPROVED LAYOUT */}
+                    <div className="lg:hidden">
+                      <div className="flex border border-gray-800 rounded-lg overflow-hidden">
+                        {/* Frozen Left Column - Asset Symbols Only */}
+                        <div className="flex-shrink-0 w-20 bg-gray-800/50">
+                          {/* Header */}
+                          <div className="h-12 flex items-center justify-center border-b border-gray-700 bg-gray-800">
+                            <span className="text-xs font-medium text-gray-300 uppercase tracking-wide">Asset</span>
+                          </div>
+                          {/* Rows */}
+                          <div className="divide-y divide-gray-700">
+                            {sortedHoldings.map((holding) => {
+                              const badgeProps = getAssetTypeBadge(holding.assetType)
+                              return (
+                                <div
+                                  key={holding.symbol}
+                                  className="h-16 flex flex-col items-center justify-center px-2"
+                                >
+                                  <div
+                                    className="w-8 h-6 rounded flex items-center justify-center text-xs font-bold mb-1"
+                                    style={{
+                                      backgroundColor: badgeProps.color + "20",
+                                      color: badgeProps.color,
+                                    }}
+                                  >
+                                    {formatSymbol(holding.symbol)}
+                                  </div>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-xs py-0 px-1"
+                                    style={{
+                                      color: badgeProps.color,
+                                      borderColor: badgeProps.color + "50",
+                                      backgroundColor: badgeProps.color + "10",
+                                    }}
+                                  >
+                                    {badgeProps.label.split(" ")[0]}
+                                  </Badge>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Scrollable Right Section */}
+                        <div className="flex-1 overflow-x-auto">
+                          <div className="min-w-[700px]">
+                            {/* Header */}
+                            <div className="h-12 grid grid-cols-6 gap-3 px-3 border-b border-gray-700 bg-gray-800/30 text-xs font-medium text-gray-300 uppercase tracking-wide">
+                              <div className="flex items-center justify-center">Shares</div>
+                              <div className="flex items-center justify-end">Avg Cost</div>
+                              <div className="flex items-center justify-end">Current</div>
+                              <div className="flex items-center justify-end">Cost Basis</div>
+                              <div className="flex items-center justify-end">Market Value</div>
+                              <div className="flex items-center justify-end">Gain/Loss</div>
+                            </div>
+                            {/* Rows */}
+                            <div className="divide-y divide-gray-700">
+                              {sortedHoldings.map((holding) => {
+                                const convertedCurrentValue = convertCurrency(
+                                  holding.currentValue,
+                                  holding.currency,
+                                  displayCurrency,
+                                )
+                                const convertedCurrentPrice = convertCurrency(
+                                  holding.currentPrice,
+                                  holding.currency,
+                                  displayCurrency,
+                                )
+                                const convertedAvgCost = convertCurrency(
+                                  holding.avg_cost_basis,
+                                  holding.currency,
+                                  displayCurrency,
+                                )
+                                const convertedTotalInvested = convertCurrency(
+                                  holding.total_invested,
+                                  holding.currency,
+                                  displayCurrency,
+                                )
+                                const convertedGainLoss = convertCurrency(
+                                  holding.gainLoss,
+                                  holding.currency,
+                                  displayCurrency,
+                                )
+
+                                return (
+                                  <div key={holding.symbol} className="h-16 grid grid-cols-6 gap-3 px-3 text-sm">
+                                    {/* Shares */}
+                                    <div className="flex items-center justify-center text-white font-medium">
+                                      {holding.total_shares.toLocaleString()}
+                                    </div>
+                                    {/* Avg Cost */}
+                                    <div className="flex items-center justify-end text-white">
+                                      {formatCurrency(convertedAvgCost, displayCurrency)}
+                                    </div>
+                                    {/* Current Price */}
+                                    <div className="flex items-center justify-end text-white">
+                                      {formatCurrency(convertedCurrentPrice, displayCurrency)}
+                                    </div>
+                                    {/* Cost Basis */}
+                                    <div className="flex items-center justify-end text-white">
+                                      {formatCurrency(convertedTotalInvested, displayCurrency)}
+                                    </div>
+                                    {/* Market Value */}
+                                    <div className="flex items-center justify-end text-white font-medium">
+                                      {formatCurrency(convertedCurrentValue, displayCurrency)}
+                                    </div>
+                                    {/* Gain/Loss */}
+                                    <div className="flex flex-col items-end justify-center">
+                                      <div
+                                        className={`flex items-center ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}
+                                      >
+                                        {holding.gainLoss >= 0 ? (
+                                          <ArrowUp className="w-3 h-3 mr-1" />
+                                        ) : (
+                                          <ArrowDown className="w-3 h-3 mr-1" />
+                                        )}
+                                        <span className="font-medium text-xs">
+                                          {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
+                                        </span>
+                                      </div>
+                                      <div
+                                        className={`text-xs ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}
+                                      >
+                                        {holding.gainLossPercent >= 0 ? "+" : ""}
+                                        {holding.gainLossPercent.toFixed(1)}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2 text-center">← Swipe left to see more details</p>
+                    </div>
+                  </>
                 )}
               </CardContent>
             </Card>
