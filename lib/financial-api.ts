@@ -180,31 +180,35 @@ export interface StockInfo {
   assetType: "STOCK" | "CRYPTO" | "THAI_STOCK" | "THAI_GOLD"
 }
 
-// Asset type colors for consistent theming
+// Asset type colors for consistent theming - FIXED WITH EXPLICIT HEX VALUES
 export const ASSET_TYPE_COLORS = {
   STOCK: {
     bg: "bg-blue-500/20",
     text: "text-blue-400",
     border: "border-blue-500/30",
     solid: "#3B82F6",
+    hex: "#3B82F6",
   },
   THAI_STOCK: {
     bg: "bg-green-500/20",
     text: "text-green-400",
     border: "border-green-500/30",
     solid: "#10B981",
+    hex: "#10B981",
   },
   CRYPTO: {
     bg: "bg-purple-500/20",
     text: "text-purple-400",
     border: "border-purple-500/30",
     solid: "#8B5CF6",
+    hex: "#8B5CF6", // Explicit purple hex for crypto
   },
   THAI_GOLD: {
     bg: "bg-yellow-500/20",
     text: "text-yellow-400",
     border: "border-yellow-500/30",
     solid: "#EAB308",
+    hex: "#EAB308",
   },
 }
 
@@ -923,7 +927,7 @@ export async function searchStocks(query: string): Promise<StockInfo[]> {
   return results.slice(0, 15)
 }
 
-// Helper function to get asset type badge component props
+// Helper function to get asset type badge component props - FIXED WITH EXPLICIT HEX COLORS
 export function getAssetTypeBadge(assetType: "STOCK" | "CRYPTO" | "THAI_STOCK" | "THAI_GOLD") {
   const colors = ASSET_TYPE_COLORS[assetType]
   const labels = {
@@ -936,7 +940,7 @@ export function getAssetTypeBadge(assetType: "STOCK" | "CRYPTO" | "THAI_STOCK" |
   return {
     className: `text-xs ${colors.bg} ${colors.text} ${colors.border}`,
     label: labels[assetType],
-    color: colors.solid,
+    color: colors.hex, // Use explicit hex color instead of solid
   }
 }
 
