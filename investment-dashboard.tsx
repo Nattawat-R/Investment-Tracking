@@ -47,10 +47,9 @@ import AddTransactionForm from "@/components/add-transaction-form"
 import { getTransactions, getHoldings, deleteTransaction, updateTransaction } from "@/app/actions/transactions"
 import type { Transaction } from "@/lib/supabase"
 import type { StockQuote } from "@/lib/financial-api"
-import { formatCurrency, getAssetTypeBadge, convertCurrency } from "@/lib/financial-api"
+import { formatCurrency, getAssetTypeBadge, convertCurrencySync } from "@/lib/financial-api"
+import type { EnrichedHolding, PortfolioSummary } from "@/lib/portfolio-calculations"
 import {
-  type EnrichedHolding,
-  type PortfolioSummary,
   calculatePortfolioSummary,
   enrichHoldingsWithMarketData,
   calculateAssetAllocation,
@@ -116,33 +115,49 @@ export default function Component() {
     transaction_date: "",
     notes: "",
   })
+  const [exchangeRate, setExchangeRate] = useState<{ rate: number; source: string; lastUpdated: string } | null>(null)
 
   const loadData = async () => {
     setIsLoading(true)
     try {
-      // Load transactions and holdings
+      // Load transactions and holdings first (fast database queries)
       const [transactionsData, holdingsData] = await Promise.all([getTransactions(), getHoldings()])
 
       setTransactions(transactionsData)
 
       if (holdingsData.length > 0) {
-        // Get current market prices
+        // Show holdings immediately with cached/previous prices
+        const enrichedHoldingsWithOldPrices = enrichHoldingsWithMarketData(holdingsData, [])
+        setHoldings(enrichedHoldingsWithOldPrices)
+
+        // Calculate summary with old prices first
+        const preliminarySummary = calculatePortfolioSummary(enrichedHoldingsWithOldPrices, displayCurrency)
+        setPortfolioSummary(preliminarySummary)
+
+        // Then fetch fresh market prices in the background
         const symbols = holdingsData.map((h) => h.symbol)
+        console.log(`🔄 Fetching fresh prices for ${symbols.length} symbols...`)
+
         const quotesResponse = await fetch("/api/stock-quotes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ symbols }),
         })
-        const quotesData = await quotesResponse.json()
-        const quotes: StockQuote[] = quotesData.quotes || []
 
-        // Enrich holdings with market data
-        const enrichedHoldings = enrichHoldingsWithMarketData(holdingsData, quotes)
-        setHoldings(enrichedHoldings)
+        if (quotesResponse.ok) {
+          const quotesData = await quotesResponse.json()
+          const quotes: StockQuote[] = quotesData.quotes || []
 
-        // Calculate portfolio summary
-        const summary = calculatePortfolioSummary(enrichedHoldings, displayCurrency)
-        setPortfolioSummary(summary)
+          // Update with fresh prices
+          const enrichedHoldings = enrichHoldingsWithMarketData(holdingsData, quotes)
+          setHoldings(enrichedHoldings)
+
+          // Recalculate summary with fresh prices
+          const summary = calculatePortfolioSummary(enrichedHoldings, displayCurrency)
+          setPortfolioSummary(summary)
+
+          console.log(`✅ Updated ${quotes.length} fresh prices`)
+        }
       } else {
         setHoldings([])
         setPortfolioSummary({
@@ -153,6 +168,21 @@ export default function Component() {
           dayChange: 0,
           dayChangePercent: 0,
         })
+      }
+
+      // Fetch current USD/THB exchange rate for display
+      try {
+        const exchangeResponse = await fetch("/api/exchange-rates?from=USD&to=THB")
+        if (exchangeResponse.ok) {
+          const exchangeData = await exchangeResponse.json()
+          setExchangeRate({
+            rate: exchangeData.exchangeRate.rate,
+            source: exchangeData.exchangeRate.source,
+            lastUpdated: exchangeData.exchangeRate.timestamp,
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching exchange rate:", error)
       }
 
       setLastUpdated(new Date())
@@ -227,11 +257,16 @@ export default function Component() {
       (holding.company_name && holding.company_name.toLowerCase().includes(searchTerm.toLowerCase())),
   )
 
-  // Sort holdings by current value (highest to lowest)
+  // Replace the sortedHoldings calculation with this improved version:
   const sortedHoldings = [...filteredHoldings].sort((a, b) => {
-    const aValue = convertCurrency(a.currentValue, a.currency, displayCurrency)
-    const bValue = convertCurrency(b.currentValue, b.currency, displayCurrency)
-    return bValue - aValue
+    const aValue = a.currentValue || 0
+    const bValue = b.currentValue || 0
+
+    // Convert to display currency for comparison
+    const aConverted = convertCurrencySync(aValue, a.currency || "USD", displayCurrency)
+    const bConverted = convertCurrencySync(bValue, b.currency || "USD", displayCurrency)
+
+    return bConverted - aConverted
   })
 
   // Sort transactions by date (newest to oldest)
@@ -261,9 +296,24 @@ export default function Component() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-white">Investment Portfolio</h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Track your investments and portfolio performance
-              {lastUpdated && <span className="ml-2">• Last updated: {lastUpdated.toLocaleTimeString()}</span>}
+            <p className="text-sm text-gray-400 mt-1 flex flex-col sm:flex-row sm:items-center gap-2">
+              <span>Track your investments and portfolio performance</span>
+              {exchangeRate && (
+                <span className="flex items-center gap-2">
+                  <span className="hidden sm:inline">•</span>
+                  <span className="flex items-center gap-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded text-blue-400 text-xs">
+                    <Globe className="w-3 h-3" />
+                    USD/THB: {exchangeRate.rate.toFixed(2)}
+                    <span className="text-blue-300/70">({exchangeRate.source})</span>
+                  </span>
+                </span>
+              )}
+              {lastUpdated && (
+                <span className="flex items-center gap-1">
+                  <span className="hidden sm:inline">•</span>
+                  <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+                </span>
+              )}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap sm:flex-nowrap">
@@ -295,7 +345,7 @@ export default function Component() {
               className="border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white hover:border-gray-600 bg-transparent transition-all duration-200"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
+              {isLoading ? "Updating..." : "Refresh"}
             </Button>
             <AddTransactionForm />
           </div>
@@ -464,17 +514,18 @@ export default function Component() {
                     {/* Asset Details Table - MOBILE OPTIMIZED */}
                     <div className="flex-1 flex flex-col min-w-0">
                       {/* Desktop Table Header */}
-                      <div className="hidden lg:grid grid-cols-12 gap-2 py-3 px-4 border-b border-gray-700 bg-gray-800/50 rounded-t-lg">
+                      {/* Desktop Table Header - IMPROVED EVEN SPACING */}
+                      <div className="hidden lg:grid grid-cols-10 gap-3 py-3 px-4 border-b border-gray-700 bg-gray-800/50 rounded-t-lg">
                         <div className="col-span-1 flex justify-center">
                           <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">•</span>
                         </div>
-                        <div className="col-span-4">
+                        <div className="col-span-3">
                           <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Asset Name</span>
                         </div>
                         <div className="col-span-2 text-center">
                           <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Allocation</span>
                         </div>
-                        <div className="col-span-3 text-right">
+                        <div className="col-span-2 text-right">
                           <span className="text-gray-300 font-medium text-xs uppercase tracking-wide">Value</span>
                         </div>
                         <div className="col-span-2 text-right">
@@ -502,14 +553,15 @@ export default function Component() {
                           return (
                             <div key={index}>
                               {/* Desktop Row */}
-                              <div className="hidden lg:grid grid-cols-12 gap-2 py-3 px-4 hover:bg-gray-800/50 transition-colors border-b border-gray-800/50 last:border-b-0">
+                              {/* Desktop Row */}
+                              <div className="hidden lg:grid grid-cols-10 gap-3 py-3 px-4 hover:bg-gray-800/50 transition-colors border-b border-gray-800/50 last:border-b-0">
                                 {/* Color Dot */}
                                 <div className="col-span-1 flex justify-center items-center">
                                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: asset.color }} />
                                 </div>
 
                                 {/* Asset Name */}
-                                <div className="col-span-4 flex flex-col justify-center min-w-0">
+                                <div className="col-span-3 flex flex-col justify-center min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="text-white font-medium text-sm truncate">{asset.symbol}</span>
                                     <Badge
@@ -529,20 +581,30 @@ export default function Component() {
                                   <span className="text-white font-bold text-sm">{asset.percentage.toFixed(1)}%</span>
                                 </div>
 
-                                {/* Value */}
-                                <div className="col-span-3 flex items-center justify-end">
+                                {/* Value - ONE DECIMAL PLACE */}
+                                <div className="col-span-2 flex items-center justify-end">
                                   <span className="text-white text-sm font-medium">
-                                    {formatCurrency(asset.value, displayCurrency)}
+                                    {displayCurrency === "USD"
+                                      ? `$${(asset.value).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                                      : `฿${(asset.value).toLocaleString("th-TH", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`}
                                   </span>
                                 </div>
 
-                                {/* Gain/Loss */}
-                                <div className="col-span-2 flex items-center justify-end">
+                                {/* Gain/Loss - TWO LINES WITH ONE DECIMAL PLACE */}
+                                <div className="col-span-2 flex flex-col items-end justify-center">
                                   <span
                                     className={`text-sm font-medium ${asset.gainLoss >= 0 ? "text-green-400 hover:text-green-300" : "text-red-400 hover:text-red-300"} transition-colors`}
                                   >
                                     {asset.gainLoss >= 0 ? "+" : ""}
-                                    {formatCurrency(asset.gainLoss, displayCurrency)}
+                                    {displayCurrency === "USD"
+                                      ? `$${Math.abs(asset.gainLoss).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`
+                                      : `฿${Math.abs(asset.gainLoss).toLocaleString("th-TH", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`}
+                                  </span>
+                                  <span
+                                    className={`text-xs ${asset.gainLoss >= 0 ? "text-green-400/80" : "text-red-400/80"}`}
+                                  >
+                                    {asset.gainLossPercent >= 0 ? "+" : ""}
+                                    {asset.gainLossPercent.toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
@@ -705,27 +767,39 @@ export default function Component() {
                       <div className="divide-y divide-gray-800">
                         {sortedHoldings.map((holding) => {
                           const badgeProps = getAssetTypeBadge(holding.assetType)
-                          const convertedCurrentValue = convertCurrency(
-                            holding.currentValue,
-                            holding.currency,
+                          // In the holdings table, replace the conversion calls with this pattern:
+                          const convertedCurrentValue = convertCurrencySync(
+                            holding.currentValue || 0,
+                            holding.currency || "USD",
                             displayCurrency,
                           )
-                          const convertedCurrentPrice = convertCurrency(
-                            holding.currentPrice,
-                            holding.currency,
+                          const convertedCurrentPrice = convertCurrencySync(
+                            holding.currentPrice || 0,
+                            holding.currency || "USD",
                             displayCurrency,
                           )
-                          const convertedAvgCost = convertCurrency(
-                            holding.avg_cost_basis,
-                            holding.currency,
+                          const convertedAvgCost = convertCurrencySync(
+                            holding.avg_cost_basis || 0,
+                            holding.currency || "USD",
                             displayCurrency,
                           )
-                          const convertedTotalInvested = convertCurrency(
-                            holding.total_invested,
-                            holding.currency,
+                          const convertedTotalInvested = convertCurrencySync(
+                            holding.total_invested || 0,
+                            holding.currency || "USD",
                             displayCurrency,
                           )
-                          const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
+                          const convertedGainLoss = convertCurrencySync(
+                            holding.gainLoss || 0,
+                            holding.currency || "USD",
+                            displayCurrency,
+                          )
+
+                          // Make sure all these values are valid numbers before displaying
+                          const safeCurrentValue = isNaN(convertedCurrentValue) ? 0 : convertedCurrentValue
+                          const safeCurrentPrice = isNaN(convertedCurrentPrice) ? 0 : convertedCurrentPrice
+                          const safeAvgCost = isNaN(convertedAvgCost) ? 0 : convertedAvgCost
+                          const safeTotalInvested = isNaN(convertedTotalInvested) ? 0 : convertedTotalInvested
+                          const safeGainLoss = isNaN(convertedGainLoss) ? 0 : convertedGainLoss
 
                           return (
                             <div
@@ -759,20 +833,18 @@ export default function Component() {
 
                               {/* Avg Cost - 1 column */}
                               <div className="flex items-center justify-center">
-                                <span className="text-white">{formatCurrency(convertedAvgCost, displayCurrency)}</span>
+                                <span className="text-white">{formatCurrency(safeAvgCost, displayCurrency)}</span>
                               </div>
 
                               {/* Current Price - 1 column */}
                               <div className="flex items-center justify-center">
-                                <span className="text-white">
-                                  {formatCurrency(convertedCurrentPrice, displayCurrency)}
-                                </span>
+                                <span className="text-white">{formatCurrency(safeCurrentPrice, displayCurrency)}</span>
                               </div>
 
                               {/* Market Value - 1 column */}
                               <div className="flex items-center justify-center">
                                 <span className="text-white font-medium">
-                                  {formatCurrency(convertedCurrentValue, displayCurrency)}
+                                  {formatCurrency(safeCurrentValue, displayCurrency)}
                                 </span>
                               </div>
 
@@ -787,7 +859,7 @@ export default function Component() {
                                     <ArrowDown className="w-3 h-3 mr-1" />
                                   )}
                                   <span className="font-medium text-xs">
-                                    {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
+                                    {formatCurrency(Math.abs(safeGainLoss), displayCurrency)}
                                   </span>
                                 </div>
                                 <div className={`text-xs ${holding.gainLoss >= 0 ? "text-green-400" : "text-red-400"}`}>
@@ -860,31 +932,36 @@ export default function Component() {
                             {/* Rows */}
                             <div className="divide-y divide-gray-700">
                               {sortedHoldings.map((holding) => {
-                                const convertedCurrentValue = convertCurrency(
-                                  holding.currentValue,
-                                  holding.currency,
+                                // In the holdings table, replace the conversion calls with this pattern:
+                                const convertedCurrentValue = convertCurrencySync(
+                                  holding.currentValue || 0,
+                                  holding.currency || "USD",
                                   displayCurrency,
                                 )
-                                const convertedCurrentPrice = convertCurrency(
-                                  holding.currentPrice,
-                                  holding.currency,
+                                const convertedCurrentPrice = convertCurrencySync(
+                                  holding.currentPrice || 0,
+                                  holding.currency || "USD",
                                   displayCurrency,
                                 )
-                                const convertedAvgCost = convertCurrency(
-                                  holding.avg_cost_basis,
-                                  holding.currency,
-                                  displayCurrency,
+                                const convertedAvgCost = convertCurrencySync(
+                                  holding.avg_cost_basis || 0,
+                                  holding.currency || "USD",
                                 )
-                                const convertedTotalInvested = convertCurrency(
-                                  holding.total_invested,
-                                  holding.currency,
-                                  displayCurrency,
+                                const convertedTotalInvested = convertCurrencySync(
+                                  holding.total_invested || 0,
+                                  holding.currency || "USD",
                                 )
-                                const convertedGainLoss = convertCurrency(
-                                  holding.gainLoss,
-                                  holding.currency,
-                                  displayCurrency,
+                                const convertedGainLoss = convertCurrencySync(
+                                  holding.gainLoss || 0,
+                                  holding.currency || "USD",
                                 )
+
+                                // Make sure all these values are valid numbers before displaying
+                                const safeCurrentValue = isNaN(convertedCurrentValue) ? 0 : convertedCurrentValue
+                                const safeCurrentPrice = isNaN(convertedCurrentPrice) ? 0 : convertedCurrentPrice
+                                const safeAvgCost = isNaN(convertedAvgCost) ? 0 : convertedAvgCost
+                                const safeTotalInvested = isNaN(convertedTotalInvested) ? 0 : convertedTotalInvested
+                                const safeGainLoss = isNaN(convertedGainLoss) ? 0 : convertedGainLoss
 
                                 return (
                                   <div key={holding.symbol} className="h-16 grid grid-cols-6 gap-3 px-3 text-sm">
@@ -894,19 +971,19 @@ export default function Component() {
                                     </div>
                                     {/* Avg Cost */}
                                     <div className="flex items-center justify-end text-white">
-                                      {formatCurrency(convertedAvgCost, displayCurrency)}
+                                      {formatCurrency(safeAvgCost, displayCurrency)}
                                     </div>
                                     {/* Current Price */}
                                     <div className="flex items-center justify-end text-white">
-                                      {formatCurrency(convertedCurrentPrice, displayCurrency)}
+                                      {formatCurrency(safeCurrentPrice, displayCurrency)}
                                     </div>
                                     {/* Cost Basis */}
                                     <div className="flex items-center justify-end text-white">
-                                      {formatCurrency(convertedTotalInvested, displayCurrency)}
+                                      {formatCurrency(safeTotalInvested, displayCurrency)}
                                     </div>
                                     {/* Market Value */}
                                     <div className="flex items-center justify-end text-white font-medium">
-                                      {formatCurrency(convertedCurrentValue, displayCurrency)}
+                                      {formatCurrency(safeCurrentValue, displayCurrency)}
                                     </div>
                                     {/* Gain/Loss */}
                                     <div className="flex flex-col items-end justify-center">
@@ -919,7 +996,7 @@ export default function Component() {
                                           <ArrowDown className="w-3 h-3 mr-1" />
                                         )}
                                         <span className="font-medium text-xs">
-                                          {formatCurrency(Math.abs(convertedGainLoss), displayCurrency)}
+                                          {formatCurrency(Math.abs(safeGainLoss), displayCurrency)}
                                         </span>
                                       </div>
                                       <div

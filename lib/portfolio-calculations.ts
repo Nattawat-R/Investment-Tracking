@@ -1,6 +1,6 @@
 import type { Holding, Transaction } from "./supabase"
 import type { StockQuote } from "./financial-api"
-import { convertCurrency } from "./financial-api"
+import { convertCurrencySync } from "./financial-api"
 
 export interface PortfolioSummary {
   totalValue: number
@@ -33,57 +33,78 @@ export interface PortfolioAllocation {
 
 export function calculatePortfolioSummary(holdings: EnrichedHolding[], displayCurrency = "USD"): PortfolioSummary {
   const totalValue = holdings.reduce((sum, holding) => {
-    const convertedValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
-    return sum + convertedValue
+    // Ensure we have valid numbers
+    const currentValue = holding.currentValue || 0
+    const currency = holding.currency || "USD"
+
+    if (isNaN(currentValue)) return sum
+
+    const convertedValue = convertCurrencySync(currentValue, currency, displayCurrency)
+    return sum + (isNaN(convertedValue) ? 0 : convertedValue)
   }, 0)
 
   const totalCost = holdings.reduce((sum, holding) => {
-    const convertedCost = convertCurrency(holding.total_invested, holding.currency, displayCurrency)
-    return sum + convertedCost
+    // Ensure we have valid numbers
+    const totalInvested = holding.total_invested || 0
+    const currency = holding.currency || "USD"
+
+    if (isNaN(totalInvested)) return sum
+
+    const convertedCost = convertCurrencySync(totalInvested, currency, displayCurrency)
+    return sum + (isNaN(convertedCost) ? 0 : convertedCost)
   }, 0)
 
   const totalGainLoss = totalValue - totalCost
   const totalGainLossPercent = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0
 
   const dayChange = holdings.reduce((sum, holding) => {
-    const convertedDayChange = convertCurrency(
-      holding.dayChange * holding.total_shares,
-      holding.currency,
-      displayCurrency,
-    )
-    return sum + convertedDayChange
+    // Ensure we have valid numbers
+    const dayChangeValue = holding.dayChange || 0
+    const totalShares = holding.total_shares || 0
+    const currency = holding.currency || "USD"
+
+    if (isNaN(dayChangeValue) || isNaN(totalShares)) return sum
+
+    const convertedDayChange = convertCurrencySync(dayChangeValue * totalShares, currency, displayCurrency)
+    return sum + (isNaN(convertedDayChange) ? 0 : convertedDayChange)
   }, 0)
 
   const dayChangePercent = totalValue > 0 ? (dayChange / totalValue) * 100 : 0
 
   return {
-    totalValue,
-    totalCost,
-    totalGainLoss,
-    totalGainLossPercent,
-    dayChange,
-    dayChangePercent,
+    totalValue: isNaN(totalValue) ? 0 : totalValue,
+    totalCost: isNaN(totalCost) ? 0 : totalCost,
+    totalGainLoss: isNaN(totalGainLoss) ? 0 : totalGainLoss,
+    totalGainLossPercent: isNaN(totalGainLossPercent) ? 0 : totalGainLossPercent,
+    dayChange: isNaN(dayChange) ? 0 : dayChange,
+    dayChangePercent: isNaN(dayChangePercent) ? 0 : dayChangePercent,
   }
 }
 
 export function enrichHoldingsWithMarketData(holdings: Holding[], quotes: StockQuote[]): EnrichedHolding[] {
   return holdings.map((holding) => {
     const quote = quotes.find((q) => q.symbol === holding.symbol)
+
+    // Ensure we have valid numbers with fallbacks
     const currentPrice = quote?.price || 0
-    const currentValue = currentPrice * holding.total_shares
-    const gainLoss = currentValue - holding.total_invested
-    const gainLossPercent = holding.total_invested > 0 ? (gainLoss / holding.total_invested) * 100 : 0
+    const totalShares = holding.total_shares || 0
+    const totalInvested = holding.total_invested || 0
+    const avgCostBasis = holding.avg_cost_basis || 0
+
+    const currentValue = currentPrice * totalShares
+    const gainLoss = currentValue - totalInvested
+    const gainLossPercent = totalInvested > 0 ? (gainLoss / totalInvested) * 100 : 0
     const dayChange = quote?.change || 0
     const dayChangePercent = quote?.changePercent || 0
 
     return {
       ...holding,
-      currentPrice,
-      currentValue,
-      gainLoss,
-      gainLossPercent,
-      dayChange,
-      dayChangePercent,
+      currentPrice: isNaN(currentPrice) ? 0 : currentPrice,
+      currentValue: isNaN(currentValue) ? 0 : currentValue,
+      gainLoss: isNaN(gainLoss) ? 0 : gainLoss,
+      gainLossPercent: isNaN(gainLossPercent) ? 0 : gainLossPercent,
+      dayChange: isNaN(dayChange) ? 0 : dayChange,
+      dayChangePercent: isNaN(dayChangePercent) ? 0 : dayChangePercent,
       assetType: quote?.assetType || "STOCK",
       currency: quote?.currency || "USD",
       exchange: quote?.exchange || "US",
@@ -96,7 +117,7 @@ export function calculatePortfolioAllocation(
   displayCurrency = "USD",
 ): PortfolioAllocation[] {
   const totalValue = holdings.reduce((sum, holding) => {
-    const convertedValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
+    const convertedValue = convertCurrencySync(holding.currentValue, holding.currency, displayCurrency)
     return sum + convertedValue
   }, 0)
 
@@ -110,7 +131,7 @@ export function calculatePortfolioAllocation(
   const allocationMap = new Map<string, { value: number; count: number }>()
 
   holdings.forEach((holding) => {
-    const convertedValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
+    const convertedValue = convertCurrencySync(holding.currentValue, holding.currency, displayCurrency)
     const existing = allocationMap.get(holding.assetType) || { value: 0, count: 0 }
     allocationMap.set(holding.assetType, {
       value: existing.value + convertedValue,
@@ -208,21 +229,26 @@ export function calculateAssetAllocation(
   if (holdings.length === 0) return []
 
   const totalValue = holdings.reduce((sum, holding) => {
-    const convertedValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
-    return sum + convertedValue
+    const currentValue = holding.currentValue || 0
+    const currency = holding.currency || "USD"
+
+    if (isNaN(currentValue)) return sum
+
+    const convertedValue = convertCurrencySync(currentValue, currency, displayCurrency)
+    return sum + (isNaN(convertedValue) ? 0 : convertedValue)
   }, 0)
 
   if (totalValue === 0) return []
 
   // More distinguishable color variations for each asset type
   const assetTypeColorVariations = {
-    STOCK: ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE", "#DBEAFE", "#EFF6FF", "#F0F9FF"], // Blue variations
-    THAI_STOCK: ["#059669", "#10B981", "#34D399", "#6EE7B7", "#9DECCC", "#C6F6D5", "#D1FAE5", "#ECFDF5"], // Green variations
-    CRYPTO: ["#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#F3F4F6", "#FAFAFA"], // Purple variations
-    THAI_GOLD: ["#CA8A04", "#EAB308", "#FACC15", "#FDE047", "#FEF08A", "#FEFCE8", "#FFFBEB", "#FEFCE8"], // Yellow variations
+    STOCK: ["#2563EB", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE", "#DBEAFE", "#EFF6FF", "#F0F9FF"],
+    THAI_STOCK: ["#059669", "#10B981", "#34D399", "#6EE7B7", "#9DECCC", "#C6F6D5", "#D1FAE5", "#ECFDF5"],
+    CRYPTO: ["#7C3AED", "#8B5CF6", "#A78BFA", "#C4B5FD", "#DDD6FE", "#EDE9FE", "#F3F4F6", "#FAFAFA"],
+    THAI_GOLD: ["#CA8A04", "#EAB308", "#FACC15", "#FDE047", "#FEF08A", "#FEFCE8", "#FFFBEB", "#FEFCE8"],
   }
 
-  // Group by asset type and assign colors (keep same logic for pie chart)
+  // Group by asset type and assign colors
   const groupedByType = holdings.reduce(
     (acc, holding) => {
       if (!acc[holding.assetType]) {
@@ -245,29 +271,36 @@ export function calculateAssetAllocation(
     gainLossPercent: number
   }> = []
 
-  // Process each asset type group (keep same color assignment logic)
+  // Process each asset type group
   Object.entries(groupedByType).forEach(([assetType, holdings]) => {
     const colors = assetTypeColorVariations[assetType as keyof typeof assetTypeColorVariations]
 
     holdings.forEach((holding, index) => {
-      const convertedValue = convertCurrency(holding.currentValue, holding.currency, displayCurrency)
-      const convertedGainLoss = convertCurrency(holding.gainLoss, holding.currency, displayCurrency)
+      const currentValue = holding.currentValue || 0
+      const gainLoss = holding.gainLoss || 0
+      const currency = holding.currency || "USD"
+
+      const convertedValue = convertCurrencySync(currentValue, currency, displayCurrency)
+      const convertedGainLoss = convertCurrencySync(gainLoss, currency, displayCurrency)
       const colorIndex = index % colors.length
 
-      result.push({
-        symbol: holding.symbol,
-        name: holding.company_name || holding.symbol,
-        value: convertedValue,
-        gainLoss: convertedGainLoss,
-        gainLossPercent: holding.gainLossPercent,
-        percentage: totalValue > 0 ? (convertedValue / totalValue) * 100 : 0,
-        assetType: holding.assetType,
-        color: colors[colorIndex],
-      })
+      // Only add if we have valid values
+      if (!isNaN(convertedValue) && convertedValue > 0) {
+        result.push({
+          symbol: holding.symbol,
+          name: holding.company_name || holding.symbol,
+          value: convertedValue,
+          gainLoss: isNaN(convertedGainLoss) ? 0 : convertedGainLoss,
+          gainLossPercent: isNaN(holding.gainLossPercent) ? 0 : holding.gainLossPercent,
+          percentage: totalValue > 0 ? (convertedValue / totalValue) * 100 : 0,
+          assetType: holding.assetType,
+          color: colors[colorIndex],
+        })
+      }
     })
   })
 
-  // CHANGED: Sort by percentage/value descending (max to min allocation)
+  // Sort by percentage/value descending
   result.sort((a, b) => b.percentage - a.percentage)
 
   return result

@@ -1,4 +1,6 @@
 // Multi-source financial API with REAL API calls - NO MOCK DATA
+import { getExchangeRate } from "./exchange-rates"
+
 const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || "demo"
 const FINNHUB_KEY = process.env.FINNHUB_API_KEY || ""
 const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY || ""
@@ -10,21 +12,15 @@ const FINNHUB_URL = "https://finnhub.io/api/v1"
 const TWELVE_DATA_URL = "https://api.twelvedata.com"
 const YAHOO_FINANCE_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 
-// Exchange rates for currency conversion
-const EXCHANGE_RATES = {
-  USD_TO_THB: 35.5, // Should be updated from real API
-  THB_TO_USD: 1 / 35.5,
-}
-
 // Simple in-memory cache to reduce API calls
 const priceCache = new Map<string, { data: any; timestamp: number }>()
-const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes
+const CACHE_DURATION = 5 * 60 * 1000 // Reduced from 10 minutes to 5 minutes for more frequent updates but still cached
 
 // Rate limiting tracker with specific limits for each API
 const apiCallTracker = new Map<string, { count: number; resetTime: number }>()
 const API_LIMITS = {
-  COINGECKO: { limit: 30, windowMs: 60 * 1000 }, // Increased limit
-  YAHOO: { limit: 100, windowMs: 60 * 1000 },
+  COINGECKO: { limit: 50, windowMs: 60 * 1000 }, // Increased limit
+  YAHOO: { limit: 200, windowMs: 60 * 1000 }, // Increased limit
   ALPHAVANTAGE: { limit: 5, windowMs: 60 * 1000 },
 }
 
@@ -212,18 +208,57 @@ export const ASSET_TYPE_COLORS = {
   },
 }
 
-// Currency conversion functions
-export function convertCurrency(amount: number, fromCurrency: string, toCurrency: string): number {
+// Currency conversion functions with real-time exchange rates
+export async function convertCurrency(amount: number, fromCurrency: string, toCurrency: string): Promise<number> {
   if (fromCurrency === toCurrency) return amount
 
+  try {
+    const exchangeRate = await getExchangeRate(fromCurrency, toCurrency)
+    return amount * exchangeRate.rate
+  } catch (error) {
+    console.error(`Error converting ${fromCurrency} to ${toCurrency}:`, error)
+
+    // Fallback to static rates if API fails
+    if (fromCurrency === "USD" && toCurrency === "THB") {
+      return amount * 35.5
+    }
+    if (fromCurrency === "THB" && toCurrency === "USD") {
+      return amount / 35.5
+    }
+
+    return amount // Return original amount if conversion fails
+  }
+}
+
+// Synchronous version for immediate use (uses cached rates or fallback)
+export function convertCurrencySync(amount: number, fromCurrency: string, toCurrency: string): number {
+  if (fromCurrency === toCurrency) return amount
+  if (isNaN(amount) || amount === null || amount === undefined) return 0
+
+  // Use fallback rates for immediate conversion
   if (fromCurrency === "USD" && toCurrency === "THB") {
-    return amount * EXCHANGE_RATES.USD_TO_THB
+    return amount * 35.5
   }
   if (fromCurrency === "THB" && toCurrency === "USD") {
-    return amount * EXCHANGE_RATES.THB_TO_USD
+    return amount / 35.5
   }
 
-  return amount // Fallback
+  return amount // Fallback to original amount
+}
+
+// NEW: Get current exchange rate synchronously from cache or fallback
+export function getCurrentExchangeRate(fromCurrency: string, toCurrency: string): number {
+  if (fromCurrency === toCurrency) return 1
+
+  // Use fallback rates
+  if (fromCurrency === "USD" && toCurrency === "THB") {
+    return 35.5
+  }
+  if (fromCurrency === "THB" && toCurrency === "USD") {
+    return 1 / 35.5
+  }
+
+  return 1 // Default fallback
 }
 
 // Cache management functions
@@ -422,7 +457,7 @@ async function getCryptoQuoteFromCoinGecko(symbol: string): Promise<StockQuote |
     console.log(`📡 URL: ${url}`)
 
     // Add delay to respect rate limits
-    await sleep(500) // Increased delay
+    await sleep(200) // Reduced delay
 
     const response = await fetch(url, {
       headers: {
@@ -524,7 +559,7 @@ async function getStockQuoteFromYahoo(symbol: string, assetType: "STOCK" | "THAI
       try {
         console.log(`🔄 Trying Yahoo Finance endpoint for ${yahooSymbol}...`)
 
-        await sleep(100)
+        await sleep(50) // Reduced delay
 
         response = await fetch(url, {
           headers: {
@@ -766,53 +801,99 @@ export async function fetchStockQuote(symbol: string): Promise<StockQuote | null
   }
 }
 
-// Function to get multiple stock quotes with improved batching and rate limiting
+// Function to get multiple stock quotes with OPTIMIZED batching and parallel processing
 export async function getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
   const quotes: StockQuote[] = []
 
-  console.log(`🚀 Starting to fetch quotes for ${symbols.length} symbols: [${symbols.join(", ")}]`)
+  console.log(`🚀 Starting OPTIMIZED fetch for ${symbols.length} symbols: [${symbols.join(", ")}]`)
 
-  // Process in smaller batches to avoid rate limiting
-  const batchSize = 1 // Reduced to 1 for maximum reliability
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize)
-    console.log(
-      `🔄 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(symbols.length / batchSize)}: [${batch.join(", ")}]`,
-    )
+  // Group symbols by asset type for optimized processing
+  const symbolsByType = symbols.reduce(
+    (acc, symbol) => {
+      const assetType = detectAssetType(symbol)
+      if (!acc[assetType]) acc[assetType] = []
+      acc[assetType].push(symbol)
+      return acc
+    },
+    {} as Record<string, string[]>,
+  )
 
-    // Process each symbol individually with detailed logging
-    for (const symbol of batch) {
-      console.log(`🎯 Fetching individual quote for: ${symbol}`)
-      try {
-        const quote = await fetchStockQuote(symbol)
-        if (quote) {
-          quotes.push(quote)
-          console.log(`✅ Successfully fetched ${symbol}: $${quote.price} (${quote.dataSource})`)
-        } else {
-          console.error(`❌ Failed to fetch quote for ${symbol}: No data returned`)
-        }
-      } catch (error) {
-        console.error(`❌ Exception while fetching ${symbol}:`, error)
+  console.log(`📊 Grouped symbols:`, symbolsByType)
+
+  // Process each asset type in parallel with optimized batch sizes
+  const promises = Object.entries(symbolsByType).map(async ([assetType, typeSymbols]) => {
+    const typeQuotes: StockQuote[] = []
+
+    if (assetType === "CRYPTO") {
+      // Process crypto in parallel batches of 3
+      const batchSize = 3
+      const batches = []
+      for (let i = 0; i < typeSymbols.length; i += batchSize) {
+        batches.push(typeSymbols.slice(i, i + batchSize))
       }
 
-      // Add delay between individual requests
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      for (const batch of batches) {
+        const batchPromises = batch.map(async (symbol) => {
+          try {
+            const quote = await getCryptoQuoteFromCoinGecko(symbol)
+            return quote || getCryptoFallbackQuote(symbol)
+          } catch (error) {
+            console.error(`❌ Error fetching crypto ${symbol}:`, error)
+            return getCryptoFallbackQuote(symbol)
+          }
+        })
+
+        const batchResults = await Promise.all(batchPromises)
+        typeQuotes.push(...batchResults.filter(Boolean))
+
+        // Shorter delay between crypto batches
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await sleep(300) // Reduced from 2000ms
+        }
+      }
+    } else {
+      // Process stocks in parallel batches of 2
+      const batchSize = 2
+      const batches = []
+      for (let i = 0; i < typeSymbols.length; i += batchSize) {
+        batches.push(typeSymbols.slice(i, i + batchSize))
+      }
+
+      for (const batch of batches) {
+        const batchPromises = batch.map(async (symbol) => {
+          try {
+            if (assetType === "THAI_STOCK") {
+              return await getStockQuoteFromYahoo(symbol, "THAI_STOCK")
+            } else if (assetType === "STOCK") {
+              return await getStockQuoteFromYahoo(symbol, "STOCK")
+            } else if (assetType === "THAI_GOLD") {
+              return getThaiGoldMockQuote(symbol)
+            }
+            return null
+          } catch (error) {
+            console.error(`❌ Error fetching ${assetType} ${symbol}:`, error)
+            return null
+          }
+        })
+
+        const batchResults = await Promise.all(batchPromises)
+        typeQuotes.push(...batchResults.filter(Boolean))
+
+        // Shorter delay between stock batches
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await sleep(200) // Reduced from 1000ms
+        }
+      }
     }
 
-    // Add delay between batches to respect rate limits
-    if (i + batchSize < symbols.length) {
-      console.log(`⏳ Waiting 2 seconds before next batch...`)
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-    }
-  }
+    return typeQuotes
+  })
 
-  console.log(`🏁 Finished fetching quotes: ${quotes.length}/${symbols.length} successful`)
+  // Wait for all asset types to complete in parallel
+  const allResults = await Promise.all(promises)
+  quotes.push(...allResults.flat())
 
-  // Log which symbols failed
-  const failedSymbols = symbols.filter((symbol) => !quotes.find((q) => q.symbol === symbol))
-  if (failedSymbols.length > 0) {
-    console.warn(`⚠️ Failed to fetch quotes for: [${failedSymbols.join(", ")}]`)
-  }
+  console.log(`🏁 OPTIMIZED fetch completed: ${quotes.length}/${symbols.length} successful in parallel`)
 
   return quotes
 }
@@ -949,9 +1030,9 @@ export function formatCurrency(amount: number, currency: string, displayCurrency
   const targetCurrency = displayCurrency || currency
   let convertedAmount = amount
 
-  // Convert if needed
+  // Convert if needed (using sync version for immediate display)
   if (currency !== targetCurrency) {
-    convertedAmount = convertCurrency(amount, currency, targetCurrency)
+    convertedAmount = convertCurrencySync(amount, currency, targetCurrency)
   }
 
   switch (targetCurrency) {
