@@ -1,5 +1,26 @@
-import Component from "../investment-dashboard"
+"use client"
 
-export default function Page() {
-  return <Component />
+import { useAuth } from "@/components/auth/auth-provider"
+import ImprovedAuthForm from "@/components/auth/improved-auth-form"
+import AuthenticatedInvestmentDashboard from "@/authenticated-investment-dashboard"
+
+export default function HomePage() {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="text-white text-lg">Loading your portfolio...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <ImprovedAuthForm />
+  }
+
+  return <AuthenticatedInvestmentDashboard />
 }
