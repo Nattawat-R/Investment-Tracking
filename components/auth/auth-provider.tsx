@@ -3,7 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
-import { supabase, getCurrentUser, signOut as supabaseSignOut } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 interface AuthContextType {
   user: User | null
@@ -33,28 +33,26 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const getInitialSession = async () => {
-    try {
-      console.log("Getting initial session...")
-      const result = await getCurrentUser()
-
-      if (result.success) {
-        setUser(result.user)
-        console.log("Initial session loaded:", result.user?.email)
-      } else {
-        console.error("Failed to get initial session:", result.error)
-        setUser(null)
-      }
-    } catch (error) {
-      console.error("Initial session error:", error)
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     // Get initial session
+    const getInitialSession = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+        if (error) {
+          console.error("Error getting session:", error)
+        } else if (session?.user) {
+          setUser(session.user)
+        }
+      } catch (error) {
+        console.error("Exception getting initial session:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
     getInitialSession()
 
     // Listen for auth changes
@@ -63,12 +61,10 @@ export default function AuthProvider({ children }: AuthProviderProps) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event, session?.user?.email)
 
-      if (event === "SIGNED_IN" && session?.user) {
+      if (session?.user) {
         setUser(session.user)
-      } else if (event === "SIGNED_OUT") {
+      } else {
         setUser(null)
-      } else if (event === "TOKEN_REFRESHED" && session?.user) {
-        setUser(session.user)
       }
 
       setLoading(false)
@@ -82,12 +78,11 @@ export default function AuthProvider({ children }: AuthProviderProps) {
   const handleSignOut = async () => {
     try {
       setLoading(true)
-      const result = await supabaseSignOut()
-      if (result.success) {
-        setUser(null)
-      } else {
-        console.error("Sign out error:", result.error)
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error("Sign out error:", error)
       }
+      setUser(null)
     } catch (error) {
       console.error("Sign out exception:", error)
     } finally {
