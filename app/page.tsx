@@ -2,19 +2,15 @@
 
 import { useAuth } from "@/components/auth/auth-provider"
 import ImprovedAuthForm from "@/components/auth/improved-auth-form"
-import InvestmentDashboard from "@/authenticated-investment-dashboard"
-import { Loader2 } from "lucide-react"
+import AuthenticatedInvestmentDashboard from "@/authenticated-investment-dashboard"
 
 export default function HomePage() {
   const { user, loading } = useAuth()
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-500 mx-auto mb-4" />
-          <p className="text-gray-400">Loading...</p>
-        </div>
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
       </div>
     )
   }
@@ -23,5 +19,5 @@ export default function HomePage() {
     return <ImprovedAuthForm />
   }
 
-  return <InvestmentDashboard />
+  return <AuthenticatedInvestmentDashboard />
 }

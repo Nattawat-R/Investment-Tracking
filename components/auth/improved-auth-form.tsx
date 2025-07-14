@@ -2,324 +2,212 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react"
-import { supabase } from "@/lib/supabase"
-
-interface AuthFormProps {
-  onSuccess?: () => void
-}
+import { Eye, EyeOff, Loader2, Mail, Lock, User, CheckCircle, AlertCircle, Info } from "lucide-react"
+import { signUpWithEmail, signInWithEmail, verifyOTP, resendOTP, getAuthErrorMessage, signOut } from "@/lib/supabase"
 
 type AuthMode = "signin" | "signup" | "verify"
+type MessageType = "error" | "success" | "info"
 
-interface AuthError {
-  message: string
-  type: "error" | "success" | "info"
+interface Message {
+  type: MessageType
+  text: string
 }
 
-// Enhanced error message mapping
-const getErrorMessage = (error: any): string => {
-  const message = error?.message?.toLowerCase() || ""
-
-  if (message.includes("invalid login credentials") || message.includes("invalid credentials")) {
-    return "Invalid email or password. Please check your credentials and try again."
-  }
-  if (message.includes("email not confirmed")) {
-    return "Please verify your email address before signing in."
-  }
-  if (message.includes("invalid email")) {
-    return "Please enter a valid email address."
-  }
-  if (message.includes("password should be at least")) {
-    return "Password must be at least 6 characters long."
-  }
-  if (message.includes("user not found")) {
-    return "No account found with this email address."
-  }
-  if (message.includes("email already registered") || message.includes("user already registered")) {
-    return "An account with this email already exists. Please sign in instead."
-  }
-  if (message.includes("too many requests")) {
-    return "Too many attempts. Please wait a few minutes before trying again."
-  }
-  if (message.includes("signup disabled")) {
-    return "New account registration is currently disabled."
-  }
-  if (message.includes("invalid verification code") || message.includes("otp")) {
-    return "Invalid verification code. Please check the code and try again."
-  }
-  if (message.includes("expired")) {
-    return "Verification code has expired. Please request a new one."
-  }
-
-  return error?.message || "An unexpected error occurred. Please try again."
-}
-
-export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
+export default function ImprovedAuthForm() {
   const [mode, setMode] = useState<AuthMode>("signin")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [verificationCode, setVerificationCode] = useState(["", "", "", "", "", ""])
+  const [displayName, setDisplayName] = useState("")
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(false)
+  const [keepSignedIn, setKeepSignedIn] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<AuthError | null>(null)
+  const [message, setMessage] = useState<Message | null>(null)
+  const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [resendCooldown, setResendCooldown] = useState(0)
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([])
 
-  // Handle OTP input
+  // Cooldown timer for resend
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [resendCooldown])
+
+  const showMessage = (type: MessageType, text: string) => {
+    setMessage({ type, text })
+    setTimeout(() => setMessage(null), 5000)
+  }
+
   const handleOtpChange = (index: number, value: string) => {
     if (value.length > 1) {
       // Handle paste
-      const pastedCode = value.slice(0, 6).split("")
-      const newCode = [...verificationCode]
-      pastedCode.forEach((char, i) => {
-        if (index + i < 6) {
-          newCode[index + i] = char
-        }
-      })
-      setVerificationCode(newCode)
-
-      // Focus on the last filled input or next empty one
-      const nextIndex = Math.min(index + pastedCode.length, 5)
-      const nextInput = document.getElementById(`otp-${nextIndex}`)
-      nextInput?.focus()
-    } else {
-      const newCode = [...verificationCode]
-      newCode[index] = value
-      setVerificationCode(newCode)
-
-      // Auto-focus next input
-      if (value && index < 5) {
-        const nextInput = document.getElementById(`otp-${index + 1}`)
-        nextInput?.focus()
+      const pastedCode = value.slice(0, 6)
+      const newOtp = [...otp]
+      for (let i = 0; i < pastedCode.length && i < 6; i++) {
+        newOtp[i] = pastedCode[i]
       }
+      setOtp(newOtp)
+
+      // Focus on the next empty field or the last field
+      const nextIndex = Math.min(pastedCode.length, 5)
+      otpRefs.current[nextIndex]?.focus()
+      return
+    }
+
+    const newOtp = [...otp]
+    newOtp[index] = value
+    setOtp(newOtp)
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus()
     }
   }
 
-  // Handle OTP backspace
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !verificationCode[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-${index - 1}`)
-      prevInput?.focus()
-    }
-  }
-
-  // Start resend cooldown
-  const startResendCooldown = () => {
-    setResendCooldown(60)
-    const interval = setInterval(() => {
-      setResendCooldown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-  }
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        setError({ message: getErrorMessage(error), type: "error" })
-        return
-      }
-
-      if (data.user) {
-        // Handle remember me
-        if (rememberMe) {
-          localStorage.setItem("rememberUser", "true")
-        } else {
-          localStorage.removeItem("rememberUser")
-        }
-
-        setError({ message: "Successfully signed in!", type: "success" })
-        onSuccess?.()
-      }
-    } catch (err) {
-      setError({ message: getErrorMessage(err), type: "error" })
-    } finally {
-      setLoading(false)
+    if (e.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus()
     }
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!email || !password) {
+      showMessage("error", "Please fill in all required fields")
+      return
+    }
+
     setLoading(true)
-    setError(null)
+    const result = await signUpWithEmail(email, password, displayName)
 
-    if (password !== confirmPassword) {
-      setError({ message: "Passwords do not match", type: "error" })
-      setLoading(false)
-      return
+    if (result.success) {
+      setMode("verify")
+      showMessage("success", "Verification code sent to your email!")
+    } else {
+      showMessage("error", getAuthErrorMessage(result.error || "Signup failed"))
     }
-
-    if (password.length < 6) {
-      setError({ message: "Password must be at least 6 characters long", type: "error" })
-      setLoading(false)
-      return
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: undefined, // Disable email link, use OTP instead
-        },
-      })
-
-      if (error) {
-        setError({ message: getErrorMessage(error), type: "error" })
-        return
-      }
-
-      if (data.user && !data.session) {
-        // User needs to verify email
-        setMode("verify")
-        setError({
-          message: "Please check your email for a 6-digit verification code",
-          type: "info",
-        })
-        startResendCooldown()
-      } else if (data.session) {
-        // User is automatically signed in
-        setError({ message: "Account created successfully!", type: "success" })
-        onSuccess?.()
-      }
-    } catch (err) {
-      setError({ message: getErrorMessage(err), type: "error" })
-    } finally {
-      setLoading(false)
-    }
+    setLoading(false)
   }
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    const code = verificationCode.join("")
-    if (code.length !== 6) {
-      setError({ message: "Please enter the complete 6-digit code", type: "error" })
-      setLoading(false)
+    if (!email || !password) {
+      showMessage("error", "Please enter your email and password")
       return
     }
 
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: "signup",
-      })
+    setLoading(true)
+    const result = await signInWithEmail(email, password)
 
-      if (error) {
-        setError({ message: getErrorMessage(error), type: "error" })
-        return
-      }
-
-      if (data.user) {
-        setError({ message: "Email verified successfully!", type: "success" })
-        onSuccess?.()
-      }
-    } catch (err) {
-      setError({ message: getErrorMessage(err), type: "error" })
-    } finally {
-      setLoading(false)
+    if (result.success) {
+      showMessage("success", "Successfully signed in!")
+      // The auth state change will be handled by the AuthProvider
+    } else {
+      showMessage("error", getAuthErrorMessage(result.error || "Sign in failed"))
     }
+    setLoading(false)
   }
 
-  const handleResendCode = async () => {
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const otpCode = otp.join("")
+
+    if (otpCode.length !== 6) {
+      showMessage("error", "Please enter the complete 6-digit code")
+      return
+    }
+
+    setLoading(true)
+    const result = await verifyOTP(email, otpCode)
+
+    if (result.success) {
+      showMessage("success", "Email verified successfully!")
+      // The auth state change will be handled by the AuthProvider
+    } else {
+      showMessage("error", getAuthErrorMessage(result.error || "Verification failed"))
+    }
+    setLoading(false)
+  }
+
+  const handleResendOTP = async () => {
     if (resendCooldown > 0) return
 
     setLoading(true)
-    setError(null)
+    const result = await resendOTP(email)
 
-    try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email,
-      })
-
-      if (error) {
-        setError({ message: getErrorMessage(error), type: "error" })
-      } else {
-        setError({ message: "Verification code sent!", type: "success" })
-        startResendCooldown()
-      }
-    } catch (err) {
-      setError({ message: getErrorMessage(err), type: "error" })
-    } finally {
-      setLoading(false)
+    if (result.success) {
+      showMessage("success", "New verification code sent!")
+      setResendCooldown(60)
+      setOtp(["", "", "", "", "", ""])
+    } else {
+      showMessage("error", getAuthErrorMessage(result.error || "Failed to resend code"))
     }
+    setLoading(false)
   }
 
   const handleCreateNewAccount = async () => {
-    setLoading(true)
-    try {
-      // Sign out any existing session
-      await supabase.auth.signOut()
+    // Sign out first to ensure clean state
+    await signOut()
+    setMode("signup")
+    setEmail("")
+    setPassword("")
+    setDisplayName("")
+    setOtp(["", "", "", "", "", ""])
+    setMessage(null)
+  }
 
-      // Reset form
-      setEmail("")
-      setPassword("")
-      setConfirmPassword("")
-      setVerificationCode(["", "", "", "", "", ""])
-      setError(null)
-      setMode("signup")
-    } catch (err) {
-      console.error("Error signing out:", err)
-    } finally {
-      setLoading(false)
+  const getMessageIcon = (type: MessageType) => {
+    switch (type) {
+      case "error":
+        return <AlertCircle className="h-4 w-4" />
+      case "success":
+        return <CheckCircle className="h-4 w-4" />
+      case "info":
+        return <Info className="h-4 w-4" />
+    }
+  }
+
+  const getMessageColor = (type: MessageType) => {
+    switch (type) {
+      case "error":
+        return "text-red-400 border-red-800 bg-red-950/50"
+      case "success":
+        return "text-green-400 border-green-800 bg-green-950/50"
+      case "info":
+        return "text-blue-400 border-blue-800 bg-blue-950/50"
     }
   }
 
   if (mode === "verify") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-gray-900 border-gray-800">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl font-bold text-white">Verify Your Email</CardTitle>
             <CardDescription className="text-gray-400">Enter the 6-digit code sent to {email}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {error && (
-              <Alert
-                className={`${
-                  error.type === "error"
-                    ? "border-red-500 bg-red-500/10 text-red-400"
-                    : error.type === "success"
-                      ? "border-green-500 bg-green-500/10 text-green-400"
-                      : "border-blue-500 bg-blue-500/10 text-blue-400"
-                }`}
-              >
-                {error.type === "error" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                <AlertDescription>{error.message}</AlertDescription>
+            {message && (
+              <Alert className={`border ${getMessageColor(message.type)}`}>
+                <div className="flex items-center gap-2">
+                  {getMessageIcon(message.type)}
+                  <AlertDescription className="text-sm">{message.text}</AlertDescription>
+                </div>
               </Alert>
             )}
 
-            <form onSubmit={handleVerifyOtp} className="space-y-6">
-              <div className="flex justify-center space-x-2">
-                {verificationCode.map((digit, index) => (
+            <form onSubmit={handleVerifyOTP} className="space-y-6">
+              <div className="flex justify-center gap-2">
+                {otp.map((digit, index) => (
                   <Input
                     key={index}
-                    id={`otp-${index}`}
+                    ref={(el) => (otpRefs.current[index] = el)}
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
@@ -333,7 +221,7 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
 
               <Button
                 type="submit"
-                disabled={loading || verificationCode.join("").length !== 6}
+                disabled={loading || otp.join("").length !== 6}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {loading ? (
@@ -345,20 +233,20 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
                   "Verify Email"
                 )}
               </Button>
+            </form>
 
-              <div className="text-center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={handleResendCode}
-                  disabled={resendCooldown > 0 || loading}
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend verification code"}
-                </Button>
-              </div>
+            <div className="text-center space-y-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleResendOTP}
+                disabled={loading || resendCooldown > 0}
+                className="text-blue-400 hover:text-blue-300"
+              >
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend verification code"}
+              </Button>
 
-              <div className="text-center">
+              <div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -368,7 +256,7 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
                   Back to sign in
                 </Button>
               </div>
-            </form>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -376,7 +264,7 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <Card className="w-full max-w-md bg-gray-900 border-gray-800">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-white">
@@ -387,105 +275,83 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {error && (
-            <Alert
-              className={`${
-                error.type === "error"
-                  ? "border-red-500 bg-red-500/10 text-red-400"
-                  : error.type === "success"
-                    ? "border-green-500 bg-green-500/10 text-green-400"
-                    : "border-blue-500 bg-blue-500/10 text-blue-400"
-              }`}
-            >
-              {error.type === "error" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-              <AlertDescription>{error.message}</AlertDescription>
+          {message && (
+            <Alert className={`border ${getMessageColor(message.type)}`}>
+              <div className="flex items-center gap-2">
+                {getMessageIcon(message.type)}
+                <AlertDescription className="text-sm">{message.text}</AlertDescription>
+              </div>
             </Alert>
           )}
 
           <form onSubmit={mode === "signin" ? handleSignIn : handleSignUp} className="space-y-4">
+            {mode === "signup" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Display Name (Optional)</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                  <Input
+                    type="text"
+                    placeholder="Your name"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-white">
-                Email
-              </Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-gray-800 border-gray-700 text-white focus:border-blue-500"
-                placeholder="Enter your email"
-              />
+              <label className="text-sm font-medium text-gray-300">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                <Input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-white">
-                Password
-              </Label>
+              <label className="text-sm font-medium text-gray-300">Password</label>
               <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                 <Input
-                  id="password"
                   type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-gray-800 border-gray-700 text-white focus:border-blue-500 pr-10"
-                  placeholder="Enter your password"
+                  className="pl-10 pr-10 bg-gray-800 border-gray-700 text-white placeholder-gray-500 focus:border-blue-500"
                 />
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-300"
                   onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-1 top-1 h-8 w-8 text-gray-500 hover:text-gray-300"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
 
-            {mode === "signup" && (
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-white">
-                  Confirm Password
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                    className="bg-gray-800 border-gray-700 text-white focus:border-blue-500 pr-10"
-                    placeholder="Confirm your password"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-gray-300"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {mode === "signin" && (
-              <div className="flex items-center space-x-2">
-                <input
-                  id="remember"
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500"
-                />
-                <Label htmlFor="remember" className="text-sm text-gray-400">
-                  Keep me signed in
-                </Label>
-              </div>
-            )}
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="keepSignedIn"
+                checked={keepSignedIn}
+                onChange={(e) => setKeepSignedIn(e.target.checked)}
+                className="rounded border-gray-700 bg-gray-800 text-blue-600 focus:ring-blue-500"
+              />
+              <label htmlFor="keepSignedIn" className="text-sm text-gray-300">
+                Keep me signed in
+              </label>
+            </div>
 
             <Button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white">
               {loading ? (
@@ -507,18 +373,19 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
                 <p className="text-sm text-gray-400">
                   Don't have an account?{" "}
                   <Button
-                    variant="link"
+                    type="button"
+                    variant="ghost"
                     onClick={() => setMode("signup")}
-                    className="text-blue-400 hover:text-blue-300 p-0"
+                    className="text-blue-400 hover:text-blue-300 p-0 h-auto font-normal"
                   >
                     Sign up
                   </Button>
                 </p>
                 <Button
-                  variant="outline"
+                  type="button"
+                  variant="ghost"
                   onClick={handleCreateNewAccount}
-                  disabled={loading}
-                  className="w-full border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  className="text-gray-400 hover:text-gray-300 text-sm"
                 >
                   Create New Account
                 </Button>
@@ -527,9 +394,10 @@ export default function ImprovedAuthForm({ onSuccess }: AuthFormProps) {
               <p className="text-sm text-gray-400">
                 Already have an account?{" "}
                 <Button
-                  variant="link"
+                  type="button"
+                  variant="ghost"
                   onClick={() => setMode("signin")}
-                  className="text-blue-400 hover:text-blue-300 p-0"
+                  className="text-blue-400 hover:text-blue-300 p-0 h-auto font-normal"
                 >
                   Sign in
                 </Button>
